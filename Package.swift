@@ -5,6 +5,9 @@ import PackageDescription
 
 let package = Package(
     name: "ProtectCadence",
+    platforms: [
+        .macOS(.v13),
+    ],
     products: [
         .library(
             name: "ProtectCadenceCore",
@@ -19,9 +22,15 @@ let package = Package(
             targets: ["protect-cadence-query"]
         ),
     ],
+    dependencies: [
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.8.0"),
+    ],
     targets: [
         .target(
-            name: "ProtectCadenceCore"
+            name: "ProtectCadenceCore",
+            dependencies: [
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ]
         ),
         .executableTarget(
             name: "protect-cadence-ingest",
@@ -29,6 +38,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "protect-cadence-query",
+            dependencies: ["ProtectCadenceCore"]
+        ),
+        .testTarget(
+            name: "ProtectCadenceCoreTests",
             dependencies: ["ProtectCadenceCore"]
         ),
     ]
