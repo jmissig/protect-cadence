@@ -87,21 +87,92 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
     }
 }
 
+public struct QueryWindow: Codable, Sendable, Equatable {
+    public let start: Date
+    public let end: Date
+
+    public init(start: Date, end: Date) {
+        self.start = start
+        self.end = end
+    }
+}
+
 public struct RecentEventsRequest: Sendable {
     public let limit: Int
+    public let window: QueryWindow?
 
-    public init(limit: Int = 50) {
+    public init(limit: Int = 50, window: QueryWindow? = nil) {
         self.limit = max(1, limit)
+        self.window = window
     }
 }
 
 public struct RecentEventsResponse: Codable, Sendable {
     public let databasePath: String
+    public let window: QueryWindow?
     public let events: [EventRow]
 
-    public init(databasePath: String, events: [EventRow]) {
+    public init(databasePath: String, window: QueryWindow? = nil, events: [EventRow]) {
         self.databasePath = databasePath
+        self.window = window
         self.events = events
+    }
+}
+
+public struct SummaryRequest: Sendable {
+    public let window: QueryWindow
+
+    public init(window: QueryWindow) {
+        self.window = window
+    }
+}
+
+public struct SummaryGroup: Codable, FetchableRecord, Sendable, Equatable {
+    public let camera: String
+    public let kind: String
+    public let rowCount: Int
+
+    public init(camera: String, kind: String, rowCount: Int) {
+        self.camera = camera
+        self.kind = kind
+        self.rowCount = rowCount
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case camera
+        case kind
+        case rowCount
+    }
+
+    public init(row: Row) {
+        camera = row["camera"]
+        kind = row["kind"]
+        rowCount = row["row_count"]
+    }
+}
+
+public struct SummaryResponse: Codable, Sendable {
+    public let command: String
+    public let databasePath: String
+    public let window: QueryWindow
+    public let totalRows: Int
+    public let distinctEventCount: Int
+    public let groups: [SummaryGroup]
+
+    public init(
+        command: String,
+        databasePath: String,
+        window: QueryWindow,
+        totalRows: Int,
+        distinctEventCount: Int,
+        groups: [SummaryGroup]
+    ) {
+        self.command = command
+        self.databasePath = databasePath
+        self.window = window
+        self.totalRows = totalRows
+        self.distinctEventCount = distinctEventCount
+        self.groups = groups
     }
 }
 
@@ -139,15 +210,71 @@ public final class ProtectCadenceDatabase {
 
     public func fetchRecent(_ request: RecentEventsRequest = RecentEventsRequest()) throws -> [EventRow] {
         try dbQueue.read { db in
-            try EventRow
+            var query = EventRow
                 .order(EventRow.Columns.timeStart.desc, EventRow.Columns.id.desc)
+            
+            if let window = request.window {
+                query = query.filter(
+                    sql: "\(EventRow.Columns.timeStart.name) >= ? AND \(EventRow.Columns.timeStart.name) < ?",
+                    arguments: [window.start, window.end]
+                )
+            }
+
+            return try query
                 .limit(request.limit)
                 .fetchAll(db)
         }
     }
 
     public func fetchRecentResponse(_ request: RecentEventsRequest = RecentEventsRequest()) throws -> RecentEventsResponse {
-        RecentEventsResponse(databasePath: path, events: try fetchRecent(request))
+        RecentEventsResponse(databasePath: path, window: request.window, events: try fetchRecent(request))
+    }
+
+    public func fetchSummary(_ request: SummaryRequest) throws -> SummaryResponse {
+        try dbQueue.read { db in
+            let arguments: StatementArguments = [request.window.start, request.window.end]
+
+            let totalRows = try Int.fetchOne(
+                db,
+                sql: """
+                    SELECT COUNT(*)
+                    FROM \(EventRow.databaseTableName)
+                    WHERE time_start >= ? AND time_start < ?
+                    """,
+                arguments: arguments
+            ) ?? 0
+
+            let distinctEventCount = try Int.fetchOne(
+                db,
+                sql: """
+                    SELECT COUNT(DISTINCT event_id)
+                    FROM \(EventRow.databaseTableName)
+                    WHERE time_start >= ? AND time_start < ?
+                    """,
+                arguments: arguments
+            ) ?? 0
+
+            let groups = try SummaryGroup.fetchAll(
+                db,
+                sql: """
+                    SELECT camera, kind, COUNT(*) AS row_count
+                    FROM \(EventRow.databaseTableName)
+                    WHERE time_start >= ? AND time_start < ?
+                    GROUP BY camera, kind
+                    ORDER BY camera ASC, kind ASC
+                    """,
+                arguments: arguments
+            )
+
+            return SummaryResponse(
+                command: ProtectCadenceCommand.query.rawValue,
+                databasePath: path,
+                window: request.window,
+                totalRows: totalRows,
+                distinctEventCount: distinctEventCount,
+                groups: groups
+            )
+        }
     }
 
     private static var migrator: DatabaseMigrator {

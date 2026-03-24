@@ -137,6 +137,289 @@ struct ProtectCadenceCoreTests {
         #expect(Set(recent.map(\.eventID)) == ["event-1"])
     }
 
+    @Test
+    func summaryGroupsRowsByCameraAndKind() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 100),
+                    camera: "Backyard",
+                    kind: "animal",
+                    eventID: "event-1"
+                ),
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 110),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "event-2"
+                ),
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 115),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "event-3"
+                ),
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 120),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "event-2"
+                ),
+            ],
+            into: database
+        )
+
+        let summary = try database.fetchSummary(
+            SummaryRequest(
+                window: QueryWindow(
+                    start: Date(timeIntervalSince1970: 90),
+                    end: Date(timeIntervalSince1970: 130)
+                )
+            )
+        )
+
+        #expect(summary.totalRows == 4)
+        #expect(summary.distinctEventCount == 3)
+        #expect(
+            summary.groups == [
+                SummaryGroup(camera: "Backyard", kind: "animal", rowCount: 1),
+                SummaryGroup(camera: "Driveway", kind: "person", rowCount: 2),
+                SummaryGroup(camera: "Driveway", kind: "vehicle", rowCount: 1),
+            ]
+        )
+    }
+
+    @Test
+    func summaryWindowExcludesRowsOutsideRange() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 99),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "before-window"
+                ),
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 100),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "inside-window"
+                ),
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 200),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "at-end-boundary"
+                ),
+            ],
+            into: database
+        )
+
+        let summary = try database.fetchSummary(
+            SummaryRequest(
+                window: QueryWindow(
+                    start: Date(timeIntervalSince1970: 100),
+                    end: Date(timeIntervalSince1970: 200)
+                )
+            )
+        )
+
+        #expect(summary.totalRows == 1)
+        #expect(summary.distinctEventCount == 1)
+        #expect(summary.groups == [SummaryGroup(camera: "Driveway", kind: "person", rowCount: 1)])
+    }
+
+    @Test
+    func summaryDistinctEventCountDoesNotDoubleCountKinds() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 100),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "event-1"
+                ),
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 100),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "event-1"
+                ),
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 101),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "event-2"
+                ),
+            ],
+            into: database
+        )
+
+        let summary = try database.fetchSummary(
+            SummaryRequest(
+                window: QueryWindow(
+                    start: Date(timeIntervalSince1970: 90),
+                    end: Date(timeIntervalSince1970: 110)
+                )
+            )
+        )
+
+        #expect(summary.totalRows == 3)
+        #expect(summary.distinctEventCount == 2)
+    }
+
+    @Test
+    func summaryReturnsZerosForEmptyWindow() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        let summary = try database.fetchSummary(
+            SummaryRequest(
+                window: QueryWindow(
+                    start: Date(timeIntervalSince1970: 100),
+                    end: Date(timeIntervalSince1970: 200)
+                )
+            )
+        )
+
+        #expect(summary.totalRows == 0)
+        #expect(summary.distinctEventCount == 0)
+        #expect(summary.groups.isEmpty)
+    }
+
+    @Test
+    func queryRunnerSummaryProducesEncodableSummaryOutput() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: now.addingTimeInterval(-30 * 60),
+                    camera: "Porch",
+                    kind: "package",
+                    eventID: "event-1"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try ProtectCadenceQueryRunner.run(
+            arguments: ["summary", "--db", databasePath, "--last-hours", "2"],
+            now: now
+        )
+
+        switch output {
+        case let .summary(response):
+            #expect(response.command == "protect-cadence-query")
+            #expect(response.totalRows == 1)
+            #expect(response.distinctEventCount == 1)
+            #expect(response.groups == [SummaryGroup(camera: "Porch", kind: "package", rowCount: 1)])
+
+            let json = try JSONOutput.encode(output)
+            #expect(json.contains("\"command\""))
+            #expect(json.contains("\"window\""))
+            #expect(json.contains("\"distinctEventCount\""))
+        case .recent:
+            Issue.record("expected summary output")
+        }
+    }
+
+    @Test
+    func queryCLIRejectsInvalidLastHours() throws {
+        do {
+            _ = try QueryCLI(arguments: ["summary", "--last-hours", "0"])
+            Issue.record("expected --last-hours validation error")
+        } catch let error as QueryCLIError {
+            #expect(error.description.contains("--last-hours"))
+        }
+    }
+
+    @Test
+    func queryRunnerRecentStillReturnsNewestFirst() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 100),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "event-1"
+                ),
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 200),
+                    camera: "Backyard",
+                    kind: "animal",
+                    eventID: "event-2"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try ProtectCadenceQueryRunner.run(
+            arguments: ["recent", "--db", databasePath, "--limit", "1"]
+        )
+
+        switch output {
+        case let .recent(response):
+            #expect(response.events.map(\.eventID) == ["event-2"])
+        case .summary:
+            Issue.record("expected recent output")
+        }
+    }
+
+    @Test
+    func queryRunnerRecentCanFilterByLastHours() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: now.addingTimeInterval(-30 * 60),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "recent-event"
+                ),
+                EventRow(
+                    timeStart: now.addingTimeInterval(-26 * 60 * 60),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "old-event"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try ProtectCadenceQueryRunner.run(
+            arguments: ["recent", "--db", databasePath, "--last-hours", "24"],
+            now: now
+        )
+
+        switch output {
+        case let .recent(response):
+            #expect(response.window == QueryWindow(start: now.addingTimeInterval(-24 * 60 * 60), end: now))
+            #expect(response.events.map(\.eventID) == ["recent-event"])
+        case .summary:
+            Issue.record("expected recent output")
+        }
+    }
+
+    private func insertRows(_ rows: [EventRow], into database: ProtectCadenceDatabase) throws {
+        for row in rows {
+            try database.insert(row)
+        }
+    }
+
     private func temporaryDatabasePath() -> String {
         FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
