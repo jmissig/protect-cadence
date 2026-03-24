@@ -15,11 +15,12 @@ Today it contains:
 - two executable targets: `protect-cadence-ingest` and `protect-cadence-query`
 - a small shared core module
 - a local SQLite database layer with migrations
-- fixture-based event normalization and ingest
+- bounded HTTP ingest from a real Protect controller
+- fixture replay plus sanitized API snapshot capture for tests
 - a small query surface for recent rows and grouped summaries
-- no real Protect HTTP integration yet
+- a checked-in ingest-side Protect API contract snapshot
 
-The CLI surface is still provisional and should stay easy to reshape while the real query needs become clearer.
+The ingest path is now real enough to validate against controllers. The query surface is still provisional and should stay easy to reshape while the useful extraction patterns become clearer.
 
 When adding structure, prefer the smallest step that moves the project toward the intended CLI and storage model. Do not introduce architecture meant for hypothetical future scale.
 
@@ -36,6 +37,7 @@ The system should produce:
 - durable local storage
 - small extraction-oriented query surfaces for local tools and agents
 - outputs that make downstream reasoning easy without embedding that reasoning in the CLI itself
+- a stable enough query grammar that agents can reliably ask for slices, aggregates, and comparisons
 
 ## Non-Goals
 
@@ -176,25 +178,30 @@ If schema pressure grows quickly, stop and reconsider the model before adding co
 
 The CLI is the main user and agent interface.
 
-Expected first commands:
+Current commands:
 - `protect-cadence-ingest`
 - `protect-cadence-query recent`
 - `protect-cadence-query summary`
-- `protect-cadence-query compare`
-- extraction-oriented filters such as time-of-day, kind, and camera constraints
+
+Likely next query direction:
+- keep the command set small
+- evolve toward a shared query grammar rather than many bespoke subcommands
+- support filtered event slices, bucketed summaries, and later carefully-scoped comparisons
+
+Useful query primitives:
+- row slices filtered by time window, camera, and kind
+- time-of-day filtering, including overnight ranges
+- grouped counts by dimensions such as camera, kind, date, hour-of-day, or day-of-week
+- explicit count semantics when row counts and distinct-event counts differ
+- delta/comparison outputs only when they remain descriptive rather than interpretive
+- optional later baseline-style outputs only if they stay mathematical and evidence-oriented
 
 Output guidance:
 - default to compact output
 - prefer structured JSON for agent consumption
 - avoid dumping raw payloads unless explicitly requested
 - optimize for extracting relevant observations rather than narrating conclusions
-
-Useful outputs include:
-- recent normalized rows
-- grouped counts
-- time-window summaries
-- filtered event slices
-- delta/comparison results
+- include the effective filters and counting semantics in the response shape
 
 The CLI should help OpenClaw pull the right evidence quickly. It should not decide by itself whether a pattern is unusual, normal, or meaningful.
 
@@ -207,13 +214,13 @@ The rest of the system should not care much about Protect-specific details once 
 ## Implementation Priorities
 
 Near-term sequence:
-1. keep the package layout for multiple executables small and stable
-2. add real Protect HTTP ingest with bounded fetch windows
-3. confirm deduplication semantics for split multi-kind events
-4. implement `recent`
-5. implement `summary`
-6. add extraction-oriented filters for kind, camera, and time-of-day
-7. add `compare` only after the core path is clean
+1. validate the real bounded ingest path against actual controller data
+2. confirm deduplication semantics for split multi-kind events
+3. add a shared filter grammar across query commands
+4. add extraction-oriented filters for kind, camera, and time-of-day
+5. add richer grouped summaries and bucketing only where they answer real questions cleanly
+6. add `compare` only after the core path is clean
+7. consider baseline-style descriptive outputs only if they stay simple and obviously useful
 
 Do not add calendar joins, weather joins, automation, or higher-level reasoning until the event dataset and extraction CLI are already useful on their own.
 
@@ -233,6 +240,7 @@ Failure signals:
 - the CLI starts mirroring the Protect API
 - raw payloads become the default output
 - the project becomes more about plumbing than evidence extraction
+- the query surface fragments into one-off bespoke commands instead of a coherent filter/grouping model
 - reasoning or anomaly judgments start creeping into the CLI surface
 
 ## Final Rule
