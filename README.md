@@ -5,11 +5,12 @@
 The current repo is still early, but it already supports:
 
 - creating and migrating a local SQLite database
-- normalizing one Protect event fixture into one or more event rows
+- bounded HTTP ingest from a local Protect controller
+- normalizing one or more Protect event fixtures into event rows
 - querying recent rows as JSON
 - querying grouped activity summaries as JSON
 
-It does not yet talk to a real Protect controller over HTTP. The ingest command is fixture-based for now.
+The ingest path is still intentionally small: login, fetch recent settled events, normalize them, insert deduplicated rows, and optionally write sanitized API snapshots for tests.
 
 ## What It Stores
 
@@ -47,23 +48,44 @@ You can override that with `--db /path/to/protect-cadence.sqlite`.
 
 ### `protect-cadence-ingest`
 
-Today this command has two modes:
+This command now has three modes:
 
 - with no arguments, it initializes the database and returns a JSON status object
-- with `--event-json`, it reads one Protect event payload from disk, normalizes it, and inserts deduplicated rows
+- with `--last-hours <n>`, it logs into Protect, fetches a bounded event window, normalizes settled events, and inserts deduplicated rows
+- with `--event-json`, it replays one event object or an array of event objects from disk
 
-Example:
+Live ingest example:
+
+```bash
+export PROTECT_CONTROLLER_URL="https://protect.local"
+export PROTECT_USERNAME="local-user"
+export PROTECT_PASSWORD="local-password"
+
+swift run protect-cadence-ingest --last-hours 6
+```
+
+Replay example with event and camera snapshots:
 
 ```bash
 swift run protect-cadence-ingest \
-  --event-json ./fixtures/event.json \
-  --camera-name "Driveway"
+  --event-json ./Tests/Fixtures/ProtectAPI/events-response.json \
+  --camera-json ./Tests/Fixtures/ProtectAPI/cameras-response.json
+```
+
+Snapshot capture example:
+
+```bash
+swift run protect-cadence-ingest \
+  --last-hours 6 \
+  --write-api-snapshot-dir ./tmp/protect-api-snapshot
 ```
 
 Notes:
 
-- `--camera-name` is only needed when the payload does not already contain a usable camera name
+- `--camera-json` is optional, but useful when replaying endpoint snapshots where events only carry camera IDs
+- `--camera-name` is only needed for replay fixtures that do not already contain a usable camera name and do not have a companion camera snapshot
 - duplicate `(event_id, kind)` rows are ignored on insert
+- live ingest counts ignored unsettled events and unsupported payloads in the JSON response
 - output is JSON, intended for local tools and agents
 
 ### `protect-cadence-query recent`
@@ -105,7 +127,7 @@ Behavior:
 
 ## Example Fixture
 
-The ingest command expects one JSON object shaped like a Protect event payload. A minimal example:
+The replay path accepts either one Protect event object or an array of event objects. A minimal single-event example:
 
 ```json
 {
@@ -151,9 +173,28 @@ swift run protect-cadence-query recent --limit 20
 swift run protect-cadence-query summary --last-hours 24
 ```
 
+5. Optionally capture sanitized API snapshots for regression tests:
+
+```bash
+swift run protect-cadence-ingest \
+  --last-hours 1 \
+  --write-api-snapshot-dir ./Tests/Fixtures/ProtectAPI
+```
+
 ## Output Shape
 
 All current commands default to JSON output.
+
+`ingest` returns:
+
+- `command`
+- `databasePath`
+- optional `window`
+- `fetchedEventCount`
+- `normalizedRowCount`
+- `insertedRowCount`
+- `ignoredEventCount`
+- `status`
 
 `recent` returns:
 
@@ -174,9 +215,18 @@ All current commands default to JSON output.
 
 Current scope is intentionally narrow:
 
-- no real Protect API client yet
+- no websocket or realtime ingest
 - no compare mode yet
 - no raw JSON archival yet
 - no dashboard or UI
 
-The next useful steps are to keep refining the query surface and then add a thin real Protect ingest boundary without turning the project into a broad Protect SDK.
+## Protect API Contract
+
+The current ingest-side Protect contract lives in:
+
+- `Docs/protect-api-contract.md`
+- `Tests/Fixtures/ProtectAPI/events-response.json`
+- `Tests/Fixtures/ProtectAPI/cameras-response.json`
+- `Tests/Fixtures/ProtectAPI/schema-snapshot.json`
+
+Those files define the fields and endpoint shapes the package currently depends on. The schema snapshot is generated from the committed sanitized fixtures and exists to make drift obvious in diffs and tests.

@@ -1,0 +1,157 @@
+{
+  "files" : [
+    {
+      "fileName" : "events-response.json",
+      "paths" : [
+        {
+          "path" : "$",
+          "presence" : "always",
+          "types" : [
+            "array"
+          ]
+        },
+        {
+          "path" : "[]",
+          "presence" : "always",
+          "types" : [
+            "object"
+          ]
+        },
+        {
+          "path" : "[].camera",
+          "presence" : "always",
+          "types" : [
+            "object",
+            "string"
+          ]
+        },
+        {
+          "path" : "[].camera.displayName",
+          "presence" : "sometimes",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].camera.id",
+          "presence" : "sometimes",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].camera.name",
+          "presence" : "sometimes",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].cameraId",
+          "presence" : "sometimes",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].detectedAt",
+          "presence" : "sometimes",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].end",
+          "presence" : "sometimes",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].eventId",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].id",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].smartDetectTypes",
+          "presence" : "always",
+          "types" : [
+            "array"
+          ]
+        },
+        {
+          "path" : "[].smartDetectTypes[]",
+          "presence" : "sometimes",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].start",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].type",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        }
+      ],
+      "rootType" : "array"
+    },
+    {
+      "fileName" : "cameras-response.json",
+      "paths" : [
+        {
+          "path" : "$",
+          "presence" : "always",
+          "types" : [
+            "array"
+          ]
+        },
+        {
+          "path" : "[]",
+          "presence" : "always",
+          "types" : [
+            "object"
+          ]
+        },
+        {
+          "path" : "[].displayName",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].id",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].name",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        }
+      ],
+      "rootType" : "array"
+    }
+  ]
+}

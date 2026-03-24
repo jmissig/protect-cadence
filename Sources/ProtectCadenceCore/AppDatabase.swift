@@ -119,6 +119,37 @@ public struct RecentEventsResponse: Codable, Sendable {
     }
 }
 
+public struct IngestResponse: Codable, Sendable {
+    public let command: String
+    public let databasePath: String
+    public let window: QueryWindow?
+    public let fetchedEventCount: Int
+    public let normalizedRowCount: Int
+    public let insertedRowCount: Int
+    public let ignoredEventCount: Int
+    public let status: String
+
+    public init(
+        command: String,
+        databasePath: String,
+        window: QueryWindow? = nil,
+        fetchedEventCount: Int,
+        normalizedRowCount: Int,
+        insertedRowCount: Int,
+        ignoredEventCount: Int,
+        status: String
+    ) {
+        self.command = command
+        self.databasePath = databasePath
+        self.window = window
+        self.fetchedEventCount = fetchedEventCount
+        self.normalizedRowCount = normalizedRowCount
+        self.insertedRowCount = insertedRowCount
+        self.ignoredEventCount = ignoredEventCount
+        self.status = status
+    }
+}
+
 public struct SummaryRequest: Sendable {
     public let window: QueryWindow
 
@@ -200,11 +231,14 @@ public final class ProtectCadenceDatabase {
         }
     }
 
-    public func insertIgnoringDuplicates(_ events: [EventRow]) throws {
+    public func insertIgnoringDuplicates(_ events: [EventRow]) throws -> Int {
         try dbQueue.write { db in
+            var insertedCount = 0
             for event in events {
                 try event.insert(db, onConflict: .ignore)
+                insertedCount += db.changesCount
             }
+            return insertedCount
         }
     }
 

@@ -1,0 +1,67 @@
+[
+  {
+    "camera" : "camera-001",
+    "cameraId" : "camera-001",
+    "detectedAt" : "2024-03-09T16:00:02Z",
+    "end" : "2024-03-09T16:00:06Z",
+    "eventId" : "event-001",
+    "id" : "event-001",
+    "smartDetectTypes" : [
+      "person",
+      "vehicle"
+    ],
+    "start" : "2024-03-09T16:00:00Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : {
+      "displayName" : "Camera 002",
+      "id" : "camera-002",
+      "name" : "Camera 002"
+    },
+    "detectedAt" : "2024-03-09T16:01:44Z",
+    "end" : "2024-03-09T16:01:49Z",
+    "eventId" : "event-002",
+    "id" : "event-002",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2024-03-09T16:01:40Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-001",
+    "cameraId" : "camera-001",
+    "end" : "2024-03-09T16:03:23Z",
+    "eventId" : "event-003",
+    "id" : "event-003",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2024-03-09T16:03:20Z",
+    "type" : "package"
+  },
+  {
+    "camera" : "camera-001",
+    "end" : "2024-03-09T16:05:05Z",
+    "eventId" : "event-004",
+    "id" : "event-004",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2024-03-09T16:05:00Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-002",
+    "cameraId" : "camera-002",
+    "detectedAt" : "2024-03-09T16:06:41Z",
+    "eventId" : "event-005",
+    "id" : "event-005",
+    "smartDetectTypes" : [
+      "person"
+    ],
+    "start" : "2024-03-09T16:06:40Z",
+    "type" : "smartDetectZone"
+  }
+]

@@ -9,6 +9,7 @@ public struct ProtectEventPayload: Codable, Sendable {
     public let detectedAt: Date?
     public let smartDetectTypes: [String]
     public let camera: ProtectEventCameraPayload?
+    public let cameraReferenceID: String?
     public let cameraID: String?
 
     public init(
@@ -20,6 +21,7 @@ public struct ProtectEventPayload: Codable, Sendable {
         detectedAt: Date? = nil,
         smartDetectTypes: [String] = [],
         camera: ProtectEventCameraPayload? = nil,
+        cameraReferenceID: String? = nil,
         cameraID: String? = nil
     ) {
         self.id = id
@@ -30,6 +32,7 @@ public struct ProtectEventPayload: Codable, Sendable {
         self.detectedAt = detectedAt
         self.smartDetectTypes = smartDetectTypes
         self.camera = camera
+        self.cameraReferenceID = cameraReferenceID
         self.cameraID = cameraID
     }
 
@@ -55,8 +58,46 @@ public struct ProtectEventPayload: Codable, Sendable {
         end = try container.decodeFlexibleDateIfPresent(forKey: .end)
         detectedAt = try container.decodeFlexibleDateIfPresent(forKey: .detectedAt)
         smartDetectTypes = try container.decodeIfPresent([String].self, forKey: .smartDetectTypes) ?? []
-        camera = try container.decodeIfPresent(ProtectEventCameraPayload.self, forKey: .camera)
+        if let cameraPayload = try? container.decodeIfPresent(ProtectEventCameraPayload.self, forKey: .camera) {
+            camera = cameraPayload
+            cameraReferenceID = nil
+        } else if let cameraIDReference = try container.decodeIfPresent(String.self, forKey: .camera) {
+            camera = nil
+            cameraReferenceID = cameraIDReference
+        } else {
+            camera = nil
+            cameraReferenceID = nil
+        }
         cameraID = try container.decodeIfPresent(String.self, forKey: .cameraID)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(id, forKey: .id)
+        try container.encodeIfPresent(eventID, forKey: .eventID)
+        try container.encodeIfPresent(type, forKey: .type)
+        try container.encodeIfPresent(start, forKey: .start)
+        try container.encodeIfPresent(end, forKey: .end)
+        try container.encodeIfPresent(detectedAt, forKey: .detectedAt)
+        try container.encode(smartDetectTypes, forKey: .smartDetectTypes)
+        if let camera {
+            try container.encode(camera, forKey: .camera)
+        } else if let cameraReferenceID {
+            try container.encode(cameraReferenceID, forKey: .camera)
+        }
+        try container.encodeIfPresent(cameraID, forKey: .cameraID)
+    }
+
+    public var currentCameraName: String? {
+        camera?.displayName ?? camera?.name
+    }
+
+    public var cameraLookupKey: String? {
+        cameraID ?? cameraReferenceID ?? camera?.id
+    }
+
+    public var isSettled: Bool {
+        end != nil
     }
 }
 
@@ -92,7 +133,8 @@ public enum ProtectEventNormalizationError: Error, CustomStringConvertible {
 public enum ProtectEventNormalizer {
     public static func normalize(
         _ payload: ProtectEventPayload,
-        fallbackCameraName: String? = nil
+        fallbackCameraName: String? = nil,
+        fallbackCameraNamesByID: [String: String] = [:]
     ) throws -> [EventRow] {
         guard let eventID = payload.eventID ?? payload.id else {
             throw ProtectEventNormalizationError.missingEventID
@@ -102,7 +144,9 @@ public enum ProtectEventNormalizer {
             throw ProtectEventNormalizationError.missingTimeStart
         }
 
-        guard let camera = fallbackCameraName ?? payload.camera?.displayName ?? payload.camera?.name else {
+        guard let camera = fallbackCameraName
+            ?? payload.currentCameraName
+            ?? payload.cameraLookupKey.flatMap({ fallbackCameraNamesByID[$0] }) else {
             throw ProtectEventNormalizationError.missingCameraName
         }
 
@@ -178,11 +222,11 @@ public enum ProtectEventNormalizer {
 
 private extension KeyedDecodingContainer {
     func decodeFlexibleDateIfPresent(forKey key: Key) throws -> Date? {
-        if let milliseconds = try decodeIfPresent(Double.self, forKey: key) {
+        if let milliseconds = try? decodeIfPresent(Double.self, forKey: key) {
             return Date(timeIntervalSince1970: milliseconds / 1000)
         }
 
-        if let stringValue = try decodeIfPresent(String.self, forKey: key) {
+        if let stringValue = try? decodeIfPresent(String.self, forKey: key) {
             if let milliseconds = Double(stringValue) {
                 return Date(timeIntervalSince1970: milliseconds / 1000)
             }

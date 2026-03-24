@@ -83,6 +83,15 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func payloadDecodesCameraStringReferenceFromFixtureSnapshot() throws {
+        let payloads: [ProtectEventPayload] = try decodeFixture("events-response.json")
+
+        #expect(payloads[0].camera == nil)
+        #expect(payloads[0].cameraReferenceID == "camera-001")
+        #expect(payloads[0].cameraID == "camera-001")
+    }
+
+    @Test
     func recentEventsAreReturnedNewestFirst() throws {
         let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
 
@@ -414,6 +423,178 @@ struct ProtectCadenceCoreTests {
         }
     }
 
+    @Test
+    func controllerClientAuthenticatesBeforeFetchingEvents() async throws {
+        let transport = RecordingProtectHTTPTransport(
+            responses: [
+                .init(
+                    statusCode: 200,
+                    headers: [
+                        "Set-Cookie": "TOKEN=test-session; Path=/; HttpOnly",
+                        "x-csrf-token": "csrf-test-token",
+                    ],
+                    body: Data("{}".utf8)
+                ),
+                .init(
+                    statusCode: 200,
+                    headers: [:],
+                    body: try fixtureData("events-response.json")
+                ),
+            ]
+        )
+
+        let client = ProtectControllerClient(
+            configuration: ProtectControllerConfiguration(
+                controllerURL: URL(string: "https://protect.example")!,
+                username: "user",
+                password: "pass"
+            ),
+            transport: transport
+        )
+
+        let events = try await client.fetchRecentEvents(
+            window: QueryWindow(
+                start: Date(timeIntervalSince1970: 1_710_000_000),
+                end: Date(timeIntervalSince1970: 1_710_003_600)
+            )
+        )
+
+        #expect(events.count == 5)
+
+        let requests = await transport.recordedRequests()
+        #expect(requests.count == 2)
+        #expect(requests[0].url?.path == "/api/auth/login")
+        #expect(requests[0].httpMethod == "POST")
+        #expect(String(data: requests[0].httpBody ?? Data(), encoding: .utf8)?.contains("\"username\":\"user\"") == true)
+        #expect(requests[1].url?.path == "/proxy/protect/api/events")
+        #expect(requests[1].value(forHTTPHeaderField: "Cookie") == "TOKEN=test-session")
+        #expect(requests[1].value(forHTTPHeaderField: "x-csrf-token") == "csrf-test-token")
+    }
+
+    @Test
+    func controllerIngestUsesCameraLookupAndWritesSnapshotArtifacts() async throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+        let snapshotDirectory = temporaryDirectoryPath()
+        let transport = RecordingProtectHTTPTransport(
+            responses: [
+                .init(
+                    statusCode: 200,
+                    headers: [
+                        "Set-Cookie": "TOKEN=test-session; Path=/; HttpOnly",
+                        "x-csrf-token": "csrf-test-token",
+                    ],
+                    body: Data("{}".utf8)
+                ),
+                .init(
+                    statusCode: 200,
+                    headers: [:],
+                    body: try fixtureData("events-response.json")
+                ),
+                .init(
+                    statusCode: 200,
+                    headers: [:],
+                    body: try fixtureData("cameras-response.json")
+                ),
+            ]
+        )
+
+        let client = ProtectControllerClient(
+            configuration: ProtectControllerConfiguration(
+                controllerURL: URL(string: "https://protect.example")!,
+                username: "user",
+                password: "pass"
+            ),
+            transport: transport
+        )
+        let service = ProtectIngestService(database: database, client: client)
+
+        let response = try await service.ingestControllerEvents(
+            window: QueryWindow(
+                start: Date(timeIntervalSince1970: 1_710_000_000),
+                end: Date(timeIntervalSince1970: 1_710_003_600)
+            ),
+            snapshotDirectory: URL(fileURLWithPath: snapshotDirectory, isDirectory: true)
+        )
+
+        #expect(response.fetchedEventCount == 5)
+        #expect(response.normalizedRowCount == 4)
+        #expect(response.insertedRowCount == 4)
+        #expect(response.ignoredEventCount == 2)
+
+        let recent = try database.fetchRecent(RecentEventsRequest(limit: 10))
+        #expect(recent.map(\.kind).sorted() == ["animal", "package", "person", "vehicle"])
+        #expect(Set(recent.map(\.camera)) == ["Camera 001", "Camera 002"])
+
+        #expect(FileManager.default.fileExists(atPath: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("events-response.json").path))
+        #expect(FileManager.default.fileExists(atPath: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("cameras-response.json").path))
+        #expect(FileManager.default.fileExists(atPath: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("schema-snapshot.json").path))
+    }
+
+    @Test
+    func fixtureIngestAcceptsArraySnapshotsAndDeduplicatesReplays() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+        let service = ProtectIngestService(database: database)
+        let eventData = try fixtureData("events-response.json")
+        let cameraData = try fixtureData("cameras-response.json")
+
+        let first = try service.ingestFixtureEvents(from: eventData, cameraLookupData: cameraData)
+        let second = try service.ingestFixtureEvents(from: eventData, cameraLookupData: cameraData)
+
+        #expect(first.fetchedEventCount == 5)
+        #expect(first.normalizedRowCount == 5)
+        #expect(first.insertedRowCount == 5)
+        #expect(first.ignoredEventCount == 1)
+        #expect(second.insertedRowCount == 0)
+    }
+
+    @Test
+    func schemaSnapshotMatchesCommittedFixtureInventory() throws {
+        let eventsData = try fixtureData("events-response.json")
+        let camerasData = try fixtureData("cameras-response.json")
+        let expected: ProtectSchemaSnapshot = try decodeFixture("schema-snapshot.json")
+
+        let actual = try ProtectSchemaSnapshot.make(
+            files: [
+                ("events-response.json", eventsData),
+                ("cameras-response.json", camerasData),
+            ]
+        )
+
+        #expect(actual == expected)
+    }
+
+    @Test
+    func snapshotWriterProducesCommittedFixturesFromUnsanitizedSamples() throws {
+        let snapshotDirectory = temporaryDirectoryPath()
+        let writer = ProtectAPISnapshotWriter(
+            directoryURL: URL(fileURLWithPath: snapshotDirectory, isDirectory: true)
+        )
+
+        try writer.write(
+            events: unsanitizedSampleEvents(),
+            cameras: unsanitizedSampleCameras()
+        )
+
+        let expectedEvents = try fixtureData("events-response.json")
+        let expectedCameras = try fixtureData("cameras-response.json")
+        let expectedSchema = try fixtureData("schema-snapshot.json")
+
+        let actualEvents = try Data(contentsOf: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("events-response.json"))
+        let actualCameras = try Data(contentsOf: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("cameras-response.json"))
+        let actualSchema = try Data(contentsOf: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("schema-snapshot.json"))
+
+        if ProcessInfo.processInfo.environment["REGENERATE_PROTECT_FIXTURES"] == "1" {
+            try actualEvents.write(to: fixturesDirectoryURL().appendingPathComponent("events-response.json"))
+            try actualCameras.write(to: fixturesDirectoryURL().appendingPathComponent("cameras-response.json"))
+            try actualSchema.write(to: fixturesDirectoryURL().appendingPathComponent("schema-snapshot.json"))
+            return
+        }
+
+        #expect(actualEvents == expectedEvents)
+        #expect(actualCameras == expectedCameras)
+        #expect(actualSchema == expectedSchema)
+    }
+
     private func insertRows(_ rows: [EventRow], into database: ProtectCadenceDatabase) throws {
         for row in rows {
             try database.insert(row)
@@ -425,5 +606,124 @@ struct ProtectCadenceCoreTests {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("sqlite")
             .path
+    }
+
+    private func temporaryDirectoryPath() -> String {
+        let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        return directoryURL.path
+    }
+
+    private func fixtureData(_ name: String) throws -> Data {
+        try Data(contentsOf: fixturesDirectoryURL().appendingPathComponent(name))
+    }
+
+    private func decodeFixture<T: Decodable>(_ name: String) throws -> T {
+        let decoder = JSONDecoder()
+        return try decoder.decode(T.self, from: fixtureData(name))
+    }
+
+    private func fixturesDirectoryURL(filePath: StaticString = #filePath) -> URL {
+        URL(fileURLWithPath: "\(filePath)")
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/ProtectAPI", isDirectory: true)
+    }
+
+    private func unsanitizedSampleCameras() -> [ProtectCameraRecord] {
+        [
+            ProtectCameraRecord(id: "raw-driveway-camera", displayName: "Driveway", name: "Driveway"),
+            ProtectCameraRecord(id: "raw-porch-camera", displayName: "Porch", name: "Porch"),
+        ]
+    }
+
+    private func unsanitizedSampleEvents() -> [ProtectEventPayload] {
+        [
+            ProtectEventPayload(
+                id: "raw-event-alpha",
+                eventID: "raw-event-alpha",
+                type: "smartDetectZone",
+                start: Date(timeIntervalSince1970: 1_710_000_000),
+                end: Date(timeIntervalSince1970: 1_710_000_006),
+                detectedAt: Date(timeIntervalSince1970: 1_710_000_002),
+                smartDetectTypes: ["person", "vehicle"],
+                cameraReferenceID: "raw-driveway-camera",
+                cameraID: "raw-driveway-camera"
+            ),
+            ProtectEventPayload(
+                id: "raw-event-beta",
+                eventID: "raw-event-beta",
+                type: "smartDetectZone",
+                start: Date(timeIntervalSince1970: 1_710_000_100),
+                end: Date(timeIntervalSince1970: 1_710_000_109),
+                detectedAt: Date(timeIntervalSince1970: 1_710_000_104),
+                smartDetectTypes: ["animal"],
+                camera: ProtectEventCameraPayload(
+                    id: "raw-porch-camera",
+                    displayName: "Porch",
+                    name: "Porch"
+                )
+            ),
+            ProtectEventPayload(
+                id: "raw-event-gamma",
+                eventID: "raw-event-gamma",
+                type: "package",
+                start: Date(timeIntervalSince1970: 1_710_000_200),
+                end: Date(timeIntervalSince1970: 1_710_000_203),
+                cameraReferenceID: "raw-driveway-camera",
+                cameraID: "raw-driveway-camera"
+            ),
+            ProtectEventPayload(
+                id: "raw-event-delta",
+                eventID: "raw-event-delta",
+                type: "motion",
+                start: Date(timeIntervalSince1970: 1_710_000_300),
+                end: Date(timeIntervalSince1970: 1_710_000_305),
+                cameraReferenceID: "raw-driveway-camera"
+            ),
+            ProtectEventPayload(
+                id: "raw-event-epsilon",
+                eventID: "raw-event-epsilon",
+                type: "smartDetectZone",
+                start: Date(timeIntervalSince1970: 1_710_000_400),
+                detectedAt: Date(timeIntervalSince1970: 1_710_000_401),
+                smartDetectTypes: ["person"],
+                cameraReferenceID: "raw-porch-camera",
+                cameraID: "raw-porch-camera"
+            ),
+        ]
+    }
+}
+
+private actor RecordingProtectHTTPTransport: ProtectHTTPTransport {
+    struct StubbedResponse: Sendable {
+        let statusCode: Int
+        let headers: [String: String]
+        let body: Data
+    }
+
+    private var responses: [StubbedResponse]
+    private var requests: [URLRequest] = []
+
+    init(responses: [StubbedResponse]) {
+        self.responses = responses
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requests.append(request)
+        let response = responses.removeFirst()
+        return (
+            response.body,
+            HTTPURLResponse(
+                url: request.url!,
+                statusCode: response.statusCode,
+                httpVersion: nil,
+                headerFields: response.headers
+            )!
+        )
+    }
+
+    func recordedRequests() -> [URLRequest] {
+        requests
     }
 }
