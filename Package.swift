@@ -5,11 +5,31 @@ import PackageDescription
 
 let package = Package(
     name: "ProtectCadence",
+    products: [
+        .library(
+            name: "ProtectCadenceCore",
+            targets: ["ProtectCadenceCore"]
+        ),
+        .executable(
+            name: "protect-cadence-ingest",
+            targets: ["protect-cadence-ingest"]
+        ),
+        .executable(
+            name: "protect-cadence-query",
+            targets: ["protect-cadence-query"]
+        ),
+    ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
+        .target(
+            name: "ProtectCadenceCore"
+        ),
         .executableTarget(
-            name: "ProtectCadence"
+            name: "protect-cadence-ingest",
+            dependencies: ["ProtectCadenceCore"]
+        ),
+        .executableTarget(
+            name: "protect-cadence-query",
+            dependencies: ["ProtectCadenceCore"]
         ),
     ]
 )
