@@ -1,7 +1,8 @@
 BINARY := protect-cadence
 BUILD_DIR ?= build
 CONFIGURATION ?= debug
-BINDIR ?= $(HOME)/bin
+PREFIX ?= $(HOME)
+BINDIR ?= $(PREFIX)/bin
 
 .PHONY: build release test install clean show-bin
 

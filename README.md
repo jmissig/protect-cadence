@@ -20,7 +20,7 @@ That installs `protect-cadence` to `~/bin/protect-cadence` by default.
 If you want a different install location:
 
 ```bash
-BINDIR="$HOME/.local/bin" make install
+make install PREFIX="$HOME/.local"
 ```
 
 If `~/bin` is not already on your `PATH`, add it first.
