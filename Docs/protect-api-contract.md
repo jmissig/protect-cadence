@@ -64,6 +64,14 @@ The machine-readable companion snapshot lives at `Tests/Fixtures/ProtectAPI/sche
 
 The sanitized live capture in `Tests/Fixtures/ProtectAPIReal/` differs from the broader synthetic baseline in a few useful ways.
 
+Current committed live capture version:
+
+- Protect `7.0.94`
+- files:
+  - `Tests/Fixtures/ProtectAPIReal/events-response-protect-7.0.94.json`
+  - `Tests/Fixtures/ProtectAPIReal/cameras-response-protect-7.0.94.json`
+  - `Tests/Fixtures/ProtectAPIReal/schema-snapshot-protect-7.0.94.json`
+
 Observed in the March 24, 2026 capture:
 
 - event-list rows used `id` but did not include `eventId`
@@ -165,13 +173,13 @@ The checked-in baseline is:
 - `Tests/Fixtures/ProtectAPI/events-response.json`
 - `Tests/Fixtures/ProtectAPI/cameras-response.json`
 - `Tests/Fixtures/ProtectAPI/schema-snapshot.json`
-- `Tests/Fixtures/ProtectAPIReal/events-response.json`
-- `Tests/Fixtures/ProtectAPIReal/cameras-response.json`
-- `Tests/Fixtures/ProtectAPIReal/schema-snapshot.json`
+- `Tests/Fixtures/ProtectAPIReal/events-response-protect-7.0.94.json`
+- `Tests/Fixtures/ProtectAPIReal/cameras-response-protect-7.0.94.json`
+- `Tests/Fixtures/ProtectAPIReal/schema-snapshot-protect-7.0.94.json`
 
 `ProtectAPI` is the synthetic baseline used to preserve broad-shape coverage, including embedded camera objects and `cameraId`.
 
-`ProtectAPIReal` is a sanitized controller capture used to document the currently observed live event-list shape.
+`ProtectAPIReal` is a sanitized controller capture used to document the currently observed live event-list shape. The committed filename includes the observed Protect version so fixture diffs are easier to track across upgrades.
 
 Both fixture sets should stay small and representative.
 

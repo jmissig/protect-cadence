@@ -2,6 +2,11 @@ import Foundation
 import Testing
 @testable import ProtectCadenceCore
 
+private let realProtectCaptureVersion = "7.0.94"
+private let realProtectEventsFixtureName = "events-response-protect-\(realProtectCaptureVersion).json"
+private let realProtectCamerasFixtureName = "cameras-response-protect-\(realProtectCaptureVersion).json"
+private let realProtectSchemaFixtureName = "schema-snapshot-protect-\(realProtectCaptureVersion).json"
+
 struct ProtectCadenceCoreTests {
     @Test
     func normalizerExpandsSmartDetectTypesIntoMultipleRows() throws {
@@ -93,7 +98,7 @@ struct ProtectCadenceCoreTests {
 
     @Test
     func realControllerSnapshotDecodesCurrentObservedEventShape() throws {
-        let payloads: [ProtectEventPayload] = try decodeFixture("events-response.json", fixtureSet: "ProtectAPIReal")
+        let payloads: [ProtectEventPayload] = try decodeFixture(realProtectEventsFixtureName, fixtureSet: "ProtectAPIReal")
 
         #expect(!payloads.isEmpty)
         #expect(payloads[0].eventID == nil)
@@ -590,9 +595,9 @@ struct ProtectCadenceCoreTests {
 
     @Test
     func realControllerSchemaSnapshotMatchesCommittedFixtureInventory() throws {
-        let eventsData = try fixtureData("events-response.json", fixtureSet: "ProtectAPIReal")
-        let camerasData = try fixtureData("cameras-response.json", fixtureSet: "ProtectAPIReal")
-        let expected: ProtectSchemaSnapshot = try decodeFixture("schema-snapshot.json", fixtureSet: "ProtectAPIReal")
+        let eventsData = try fixtureData(realProtectEventsFixtureName, fixtureSet: "ProtectAPIReal")
+        let camerasData = try fixtureData(realProtectCamerasFixtureName, fixtureSet: "ProtectAPIReal")
+        let expected: ProtectSchemaSnapshot = try decodeFixture(realProtectSchemaFixtureName, fixtureSet: "ProtectAPIReal")
 
         let actual = try ProtectSchemaSnapshot.make(
             files: [

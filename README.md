@@ -228,8 +228,8 @@ The current ingest-side Protect contract lives in:
 - `Tests/Fixtures/ProtectAPI/events-response.json`
 - `Tests/Fixtures/ProtectAPI/cameras-response.json`
 - `Tests/Fixtures/ProtectAPI/schema-snapshot.json`
-- `Tests/Fixtures/ProtectAPIReal/events-response.json`
-- `Tests/Fixtures/ProtectAPIReal/cameras-response.json`
-- `Tests/Fixtures/ProtectAPIReal/schema-snapshot.json`
+- `Tests/Fixtures/ProtectAPIReal/events-response-protect-7.0.94.json`
+- `Tests/Fixtures/ProtectAPIReal/cameras-response-protect-7.0.94.json`
+- `Tests/Fixtures/ProtectAPIReal/schema-snapshot-protect-7.0.94.json`
 
-`ProtectAPI` is the small synthetic baseline that exercises broader fixture shapes. `ProtectAPIReal` is a sanitized live controller capture. The schema snapshots are generated from the committed fixtures and exist to make drift obvious in diffs and tests.
+`ProtectAPI` is the small synthetic baseline that exercises broader fixture shapes. `ProtectAPIReal` is a sanitized live controller capture, versioned in the filename by the observed Protect release. The schema snapshots are generated from the committed fixtures and exist to make drift obvious in diffs and tests.
