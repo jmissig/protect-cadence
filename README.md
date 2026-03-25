@@ -17,13 +17,13 @@ make install
 
 That installs `protect-cadence` to `~/bin/protect-cadence` by default.
 
+If `~/bin` is not already on your `PATH`, add it first.
+
 If you want a different install location:
 
 ```bash
-make install PREFIX="$HOME/.local"
+sudo make install PREFIX="/usr/local"
 ```
-
-If `~/bin` is not already on your `PATH`, add it first.
 
 ## First Run
 
@@ -51,6 +51,8 @@ After setup, the usual ingest command is:
 protect-cadence ingest --last-hours 6
 ```
 
+This is designed to be run regularly via launchd or cron. Time overlap is fine.
+
 ## Config Shape
 
 The config file stores auth plus a top-level `databasePath`:
@@ -66,6 +68,8 @@ The config file stores auth plus a top-level `databasePath`:
   "databasePath": "/Users/example/Library/Application Support/protect-cadence/protect-cadence.sqlite"
 }
 ```
+
+The `query` command only needs the `databasePath` to function.
 
 ## Common Queries
 
