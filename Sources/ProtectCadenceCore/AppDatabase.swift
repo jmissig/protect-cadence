@@ -23,6 +23,17 @@ public struct ProtectCadencePaths: Sendable {
             .appendingPathComponent("protect-cadence.sqlite")
         return ProtectCadencePaths(databasePath: url.path)
     }
+
+    public static func defaultConfigPath(
+        fileManager: FileManager = .default,
+        homeDirectoryURL: URL? = nil
+    ) -> String {
+        let homeDirectory = homeDirectoryURL ?? fileManager.homeDirectoryForCurrentUser
+        return homeDirectory
+            .appendingPathComponent("Library/Application Support/protect-cadence", isDirectory: true)
+            .appendingPathComponent("config.json")
+            .path
+    }
 }
 
 public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord, Sendable {

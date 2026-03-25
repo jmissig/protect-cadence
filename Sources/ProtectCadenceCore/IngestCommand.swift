@@ -30,6 +30,11 @@ public struct IngestCLI: Sendable {
     public let cameraName: String?
     public let lastHours: Int?
     public let snapshotDirectoryPath: String?
+    public let controllerURL: String?
+    public let username: String?
+    public let password: String?
+    public let allowInsecureTLS: Bool?
+    public let configPath: String
 
     public init(arguments: [String]) throws {
         var remaining = arguments
@@ -39,6 +44,11 @@ public struct IngestCLI: Sendable {
         var cameraName: String?
         var lastHours: Int?
         var snapshotDirectoryPath: String?
+        var controllerURL: String?
+        var username: String?
+        var password: String?
+        var allowInsecureTLS: Bool?
+        var configPath = ProtectCadencePaths.defaultConfigPath()
 
         func popValue(for flag: String) throws -> String {
             guard let index = remaining.firstIndex(of: flag) else {
@@ -69,6 +79,10 @@ public struct IngestCLI: Sendable {
             databasePath = try popValue(for: "--db")
         }
 
+        if remaining.contains("--config") {
+            configPath = try popValue(for: "--config")
+        }
+
         if remaining.contains("--event-json") {
             eventJSONPath = try popValue(for: "--event-json")
         }
@@ -92,6 +106,23 @@ public struct IngestCLI: Sendable {
             snapshotDirectoryPath = try popValue(for: "--write-api-snapshot-dir")
         }
 
+        if remaining.contains("--controller-url") {
+            controllerURL = try popValue(for: "--controller-url")
+        }
+
+        if remaining.contains("--username") {
+            username = try popValue(for: "--username")
+        }
+
+        if remaining.contains("--password") {
+            password = try popValue(for: "--password")
+        }
+
+        if remaining.contains("--allow-insecure-tls") {
+            allowInsecureTLS = true
+            remaining.removeAll { $0 == "--allow-insecure-tls" }
+        }
+
         if eventJSONPath != nil, lastHours != nil {
             throw IngestCLIError.conflictingModes
         }
@@ -108,6 +139,19 @@ public struct IngestCLI: Sendable {
             throw IngestCLIError.unexpectedArgument("--write-api-snapshot-dir")
         }
 
+        if (controllerURL != nil || username != nil || password != nil || allowInsecureTLS != nil), lastHours == nil {
+            if controllerURL != nil {
+                throw IngestCLIError.unexpectedArgument("--controller-url")
+            }
+            if username != nil {
+                throw IngestCLIError.unexpectedArgument("--username")
+            }
+            if password != nil {
+                throw IngestCLIError.unexpectedArgument("--password")
+            }
+            throw IngestCLIError.unexpectedArgument("--allow-insecure-tls")
+        }
+
         if let unexpected = remaining.first {
             throw IngestCLIError.unexpectedArgument(unexpected)
         }
@@ -118,6 +162,11 @@ public struct IngestCLI: Sendable {
         self.cameraName = cameraName
         self.lastHours = lastHours
         self.snapshotDirectoryPath = snapshotDirectoryPath
+        self.controllerURL = controllerURL
+        self.username = username
+        self.password = password
+        self.allowInsecureTLS = allowInsecureTLS
+        self.configPath = configPath
     }
 
     public func queryWindow(now: Date = Date()) -> QueryWindow? {
@@ -134,7 +183,11 @@ public enum ProtectCadenceIngestRunner {
     public static func run(
         arguments: [String],
         now: Date = Date(),
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        passwordStore: ProtectPasswordStore = MacOSKeychainPasswordStore(),
+        clientFactory: @Sendable (ProtectControllerConfiguration) -> ProtectControllerClient = { configuration in
+            ProtectControllerClient(configuration: configuration)
+        }
     ) async throws -> IngestResponse {
         let cli = try IngestCLI(arguments: arguments)
         let database = try ProtectCadenceDatabase(path: cli.databasePath)
@@ -143,8 +196,18 @@ public enum ProtectCadenceIngestRunner {
         let service: ProtectIngestService
 
         if let window = cli.queryWindow(now: now) {
-            let configuration = try ProtectControllerConfiguration.fromEnvironment(environment)
-            let client = ProtectControllerClient(configuration: configuration)
+            let configuration = try ProtectAuthResolver.resolveControllerConfiguration(
+                overrides: ProtectAuthOverrides(
+                    controllerURL: cli.controllerURL,
+                    username: cli.username,
+                    password: cli.password,
+                    allowInsecureTLS: cli.allowInsecureTLS
+                ),
+                environment: environment,
+                configPath: cli.configPath,
+                passwordStore: passwordStore
+            )
+            let client = clientFactory(configuration)
             service = ProtectIngestService(database: database, client: client)
             let snapshotDirectory = cli.snapshotDirectoryPath.map(URL.init(fileURLWithPath:))
             response = try await service.ingestControllerEvents(

@@ -34,7 +34,7 @@ public struct ProtectControllerConfiguration: Sendable {
             throw ProtectControllerConfigurationError.missingEnvironmentVariable("PROTECT_PASSWORD")
         }
 
-        let allowInsecureTLS = Self.parseBooleanEnvironmentValue(environment["PROTECT_ALLOW_INSECURE_TLS"])
+        let allowInsecureTLS = ProtectAuthResolver.parseBooleanString(environment["PROTECT_ALLOW_INSECURE_TLS"])
 
         guard let controllerURL = URL(string: rawURL) else {
             throw ProtectControllerConfigurationError.invalidControllerURL(rawURL)
@@ -46,19 +46,6 @@ public struct ProtectControllerConfiguration: Sendable {
             password: password,
             allowInsecureTLS: allowInsecureTLS
         )
-    }
-
-    private static func parseBooleanEnvironmentValue(_ value: String?) -> Bool {
-        guard let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
-            return false
-        }
-
-        switch normalized {
-        case "1", "true", "yes", "y", "on":
-            return true
-        default:
-            return false
-        }
     }
 
     var loginURL: URL {

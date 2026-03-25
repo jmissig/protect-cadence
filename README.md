@@ -44,6 +44,37 @@ By default, commands create or use a SQLite file named `protect-cadence.sqlite` 
 
 You can override that with `--db /path/to/protect-cadence.sqlite`.
 
+## Auth And Config
+
+Live ingest uses this auth resolution order:
+
+- explicit CLI flags
+- environment variables
+- `~/Library/Application Support/protect-cadence/config.json` plus macOS Keychain
+
+The config file stores only:
+
+- `controllerURL`
+- `username`
+- `allowInsecureTLS`
+
+The Protect password is stored separately in the macOS Keychain.
+
+Supported auth env vars remain:
+
+- `PROTECT_CONTROLLER_URL`
+- `PROTECT_USERNAME`
+- `PROTECT_PASSWORD`
+- `PROTECT_ALLOW_INSECURE_TLS`
+
+Recommended first-time setup:
+
+```bash
+swift run protect-cadence auth login
+swift run protect-cadence auth status
+swift run protect-cadence ingest --last-hours 6
+```
+
 ## Current Commands
 
 ### `protect-cadence ingest`
@@ -57,11 +88,19 @@ This is the primary ingest entrypoint and has three modes:
 Live ingest example:
 
 ```bash
-export PROTECT_CONTROLLER_URL="https://protect.local"
-export PROTECT_USERNAME="local-user"
-export PROTECT_PASSWORD="local-password"
-
+swift run protect-cadence auth login
 swift run protect-cadence ingest --last-hours 6
+```
+
+Live ingest with explicit overrides:
+
+```bash
+swift run protect-cadence ingest \
+  --last-hours 6 \
+  --controller-url https://protect.local \
+  --username local-user \
+  --password local-password \
+  --allow-insecure-tls
 ```
 
 Replay example with event and camera snapshots:
@@ -84,6 +123,7 @@ Notes:
 
 - `--camera-json` is optional, but useful when replaying endpoint snapshots where events only carry camera IDs
 - `--camera-name` is only needed for replay fixtures that do not already contain a usable camera name and do not have a companion camera snapshot
+- live ingest also accepts `--config /path/to/config.json` if you do not want the default config path
 - duplicate `(event_id, kind)` rows are ignored on insert
 - live ingest counts ignored unsettled events and unsupported payloads in the JSON response
 - output is JSON, intended for local tools and agents
@@ -120,19 +160,24 @@ swift run protect-cadence query summary --db ./data/protect-cadence.sqlite --las
 
 ### `protect-cadence auth`
 
-This is intentionally only a stub right now. It exists so the single-command surface is in place before auth grows into per-user config and Keychain-backed setup.
+Manages the default live-ingest credentials.
 
 ```bash
 swift run protect-cadence auth
 swift run protect-cadence auth status
+swift run protect-cadence auth login
+swift run protect-cadence auth clear
 ```
 
 Behavior:
 
-- default window is the last `24` hours
-- `groups` contains flat `{ camera, kind, rowCount }` entries
-- `totalRows` is the number of normalized rows in the window
-- `distinctEventCount` counts unique `event_id` values so multi-kind events are not double-counted there
+- `auth` with no subcommand behaves like `auth status`
+- `auth login` accepts `--controller-url`, `--username`, `--password`, and `--allow-insecure-tls`
+- `auth login` prompts for any missing controller URL or username, and prompts for the password if it is not supplied by flag or env var
+- `auth status` reports whether the config file exists and whether a matching Keychain password is available
+- `auth clear` removes the config file and deletes the matching Keychain password
+- `auth clear --force` skips the confirmation prompt
+- all auth subcommands accept `--config /path/to/config.json`
 
 ## Example Fixture
 
@@ -157,32 +202,38 @@ That fixture normalizes into two rows: one `person` row and one `vehicle` row.
 
 ## Typical Local Workflow
 
-1. Initialize a database:
+1. Save live-ingest credentials:
+
+```bash
+swift run protect-cadence auth login
+```
+
+2. Initialize a database:
 
 ```bash
 swift run protect-cadence ingest
 ```
 
-2. Ingest one or more local event fixtures:
+3. Ingest one or more local event fixtures:
 
 ```bash
 swift run protect-cadence ingest --event-json ./fixtures/event-1.json
 swift run protect-cadence ingest --event-json ./fixtures/event-2.json
 ```
 
-3. Inspect the latest rows:
+4. Inspect the latest rows:
 
 ```bash
 swift run protect-cadence query recent --limit 20
 ```
 
-4. Ask for a compact summary:
+5. Ask for a compact summary:
 
 ```bash
 swift run protect-cadence query summary --last-hours 24
 ```
 
-5. Optionally capture sanitized API snapshots for regression tests:
+6. Optionally capture sanitized API snapshots for regression tests:
 
 ```bash
 swift run protect-cadence ingest \
@@ -220,10 +271,6 @@ All current commands default to JSON output.
 - `distinctEventCount`
 - `groups`
 
-## Compatibility Shims
-
-`protect-cadence-ingest` and `protect-cadence-query` still exist as small compatibility wrappers, but the documented path is now the unified `protect-cadence` executable.
-
 ## Current Limits
 
 Current scope is intentionally narrow:
@@ -232,6 +279,7 @@ Current scope is intentionally narrow:
 - no compare mode yet
 - no raw JSON archival yet
 - no dashboard or UI
+- `auth login` stores credentials but does not perform a live validation request
 
 ## Protect API Contract
 
