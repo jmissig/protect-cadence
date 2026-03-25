@@ -94,6 +94,25 @@ Current implication:
 
 ## Normalization Rules
 
+### Base row fields
+
+Normalized SQLite rows currently store:
+
+- `time_start`
+- `time_end`
+- `camera_id`
+- `camera`
+- `event_type`
+- `kind`
+- `event_id`
+
+Current intent:
+
+- `camera_id` keeps the stable Protect camera identifier when available
+- `camera` keeps the resolved human-readable camera name
+- `event_type` preserves the original Protect event `type` value, such as `smartDetectZone` or `smartDetectLine`
+- normalized row identity still uses `event_id + kind`
+
 ### Event identity
 
 - normalized row identity currently uses `event_id + kind`
@@ -129,6 +148,12 @@ Camera name precedence is:
 4. lookup by `cameraId`, string `camera`, or `camera.id` against `/cameras`
 
 If none of those produce a usable name, the event is currently ignored.
+
+`camera_id` is filled from the same lookup path used for camera resolution:
+
+1. `cameraId`
+2. string `camera`
+3. `camera.id`
 
 ### Kind normalization
 
@@ -191,3 +216,7 @@ When the Protect API changes:
 4. inspect the diffs to see exactly which fields, types, or optionality changed
 
 The `snapshotWriterProducesCommittedFixturesFromUnsanitizedSamples` test supports fixture regeneration when run with `REGENERATE_PROTECT_FIXTURES=1`.
+
+## Deferred Identity Question
+
+The schema does not yet include controller or source identity. That may matter later if one local database starts mixing multiple Protect controllers or other event sources, but the current repo is intentionally not guessing at that shape yet.

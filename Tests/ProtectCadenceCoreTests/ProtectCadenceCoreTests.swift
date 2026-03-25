@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 @testable import ProtectCadenceCore
 
@@ -28,22 +29,28 @@ struct ProtectCadenceCoreTests {
         #expect(rows.allSatisfy { $0.eventID == "event-1" })
         #expect(rows.allSatisfy { $0.timeStart == Date(timeIntervalSince1970: 105) })
         #expect(rows.allSatisfy { $0.timeEnd == Date(timeIntervalSince1970: 110) })
+        #expect(rows.allSatisfy { $0.cameraID == nil })
         #expect(rows.allSatisfy { $0.camera == "Driveway" })
+        #expect(rows.allSatisfy { $0.eventType == "smartDetectZone" })
     }
 
     @Test
     func normalizerMapsLegacyAliasesAndUsesFallbackCameraName() throws {
         let payload = ProtectEventPayload(
             id: "event-2",
+            type: "smartDetectZone",
             start: Date(timeIntervalSince1970: 100),
-            smartDetectTypes: ["car", "pet"]
+            smartDetectTypes: ["car", "pet"],
+            cameraID: "camera-2"
         )
 
         let rows = try ProtectEventNormalizer.normalize(payload, fallbackCameraName: "Backyard")
 
         #expect(rows.map(\.kind) == ["vehicle", "animal"])
         #expect(rows.allSatisfy { $0.eventID == "event-2" })
+        #expect(rows.allSatisfy { $0.cameraID == "camera-2" })
         #expect(rows.allSatisfy { $0.camera == "Backyard" })
+        #expect(rows.allSatisfy { $0.eventType == "smartDetectZone" })
     }
 
     @Test
@@ -82,6 +89,7 @@ struct ProtectCadenceCoreTests {
 
         #expect(rows.count == 1)
         #expect(rows[0].kind == "package")
+        #expect(rows[0].eventType == "smartDetectZone")
         #expect(rows[0].camera == "Porch")
         #expect(rows[0].timeStart == Date(timeIntervalSince1970: 1_710_000_001))
         #expect(rows[0].timeEnd == Date(timeIntervalSince1970: 1_710_000_005))
@@ -336,6 +344,130 @@ struct ProtectCadenceCoreTests {
         let recent = try database.fetchRecent(RecentEventsRequest(limit: 10))
 
         #expect(recent.map(\.eventID) == ["event-2", "event-1"])
+    }
+
+    @Test
+    func recentRowsIncludeCameraIDAndEventType() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        try database.insert(
+            EventRow(
+                timeStart: Date(timeIntervalSince1970: 100),
+                timeEnd: Date(timeIntervalSince1970: 110),
+                cameraID: "camera-123",
+                camera: "Driveway",
+                eventType: "smartDetectZone",
+                kind: "person",
+                eventID: "event-123"
+            )
+        )
+
+        let recent = try database.fetchRecent(RecentEventsRequest(limit: 1))
+
+        #expect(recent.count == 1)
+        #expect(recent[0].cameraID == "camera-123")
+        #expect(recent[0].camera == "Driveway")
+        #expect(recent[0].eventType == "smartDetectZone")
+    }
+
+    @Test
+    func migrationsUpgradeLegacyCurrentSchemaToIncludeCameraIDAndEventType() throws {
+        let databasePath = temporaryDatabasePath()
+
+        let dbQueue = try DatabaseQueue(path: databasePath)
+        try dbQueue.write { db in
+            try db.create(table: "events") { table in
+                table.autoIncrementedPrimaryKey("id")
+                table.column("time_start", .datetime).notNull()
+                table.column("time_end", .datetime)
+                table.column("camera", .text).notNull()
+                table.column("kind", .text).notNull()
+                table.column("event_id", .text).notNull()
+            }
+
+            try db.create(
+                index: "events_on_event_id_kind",
+                on: "events",
+                columns: ["event_id", "kind"],
+                unique: true
+            )
+
+            try db.execute(
+                sql: """
+                    INSERT INTO events (time_start, time_end, camera, kind, event_id)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    Date(timeIntervalSince1970: 100),
+                    Date(timeIntervalSince1970: 110),
+                    "Driveway",
+                    "person",
+                    "event-legacy"
+                ]
+            )
+        }
+
+        let database = try ProtectCadenceDatabase(path: databasePath)
+        let recent = try database.fetchRecent(RecentEventsRequest(limit: 1))
+
+        #expect(recent.count == 1)
+        #expect(recent[0].eventID == "event-legacy")
+        #expect(recent[0].cameraID == nil)
+        #expect(recent[0].eventType == nil)
+
+        try dbQueue.read { db in
+            let columns = Set(try db.columns(in: "events").map(\.name))
+            #expect(columns.contains("camera_id"))
+            #expect(columns.contains("event_type"))
+        }
+    }
+
+    @Test
+    func migrationsUpgradeOriginalLegacySchemaToFinalEventShape() throws {
+        let databasePath = temporaryDatabasePath()
+
+        let dbQueue = try DatabaseQueue(path: databasePath)
+        try dbQueue.write { db in
+            try db.create(table: "events") { table in
+                table.autoIncrementedPrimaryKey("id")
+                table.column("ts", .datetime).notNull()
+                table.column("camera", .text).notNull()
+                table.column("kind", .text).notNull()
+                table.column("count", .integer).notNull().defaults(to: 1)
+                table.column("sourceEventID", .text).notNull()
+                table.column("rawJSON", .text)
+            }
+
+            try db.execute(
+                sql: """
+                    INSERT INTO events (ts, camera, kind, count, sourceEventID, rawJSON)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    Date(timeIntervalSince1970: 200),
+                    "Porch",
+                    "package",
+                    1,
+                    "event-original",
+                    "{\"ignored\":true}"
+                ]
+            )
+        }
+
+        let database = try ProtectCadenceDatabase(path: databasePath)
+        let recent = try database.fetchRecent(RecentEventsRequest(limit: 1))
+
+        #expect(recent.count == 1)
+        #expect(recent[0].eventID == "event-original")
+        #expect(recent[0].camera == "Porch")
+        #expect(recent[0].kind == "package")
+        #expect(recent[0].cameraID == nil)
+        #expect(recent[0].eventType == nil)
+
+        try dbQueue.read { db in
+            let columns = Set(try db.columns(in: "events").map(\.name))
+            #expect(columns == ["id", "time_start", "time_end", "camera_id", "camera", "event_type", "kind", "event_id"])
+        }
     }
 
     @Test
@@ -801,6 +933,33 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func queryRunnerRecentJSONIncludesCameraIDAndEventType() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+
+        try database.insert(
+            EventRow(
+                timeStart: Date(timeIntervalSince1970: 100),
+                cameraID: "camera-json",
+                camera: "Garage",
+                eventType: "smartDetectLine",
+                kind: "vehicle",
+                eventID: "event-json"
+            )
+        )
+
+        let output = try ProtectCadenceQueryRunner.run(
+            arguments: ["recent", "--db", databasePath, "--limit", "1"]
+        )
+        let json = try JSONOutput.encode(output)
+
+        #expect(json.contains("\"cameraID\""))
+        #expect(json.contains("\"camera-json\""))
+        #expect(json.contains("\"eventType\""))
+        #expect(json.contains("\"smartDetectLine\""))
+    }
+
+    @Test
     func controllerClientAuthenticatesBeforeFetchingEvents() async throws {
         let transport = RecordingProtectHTTPTransport(
             responses: [
@@ -901,6 +1060,8 @@ struct ProtectCadenceCoreTests {
         let recent = try database.fetchRecent(RecentEventsRequest(limit: 10))
         #expect(recent.map(\.kind).sorted() == ["animal", "package", "person", "vehicle"])
         #expect(Set(recent.map(\.camera)) == ["Entry 02", "North 01"])
+        #expect(Set(recent.compactMap(\.cameraID)) == ["camera-001", "camera-002"])
+        #expect(Set(recent.compactMap(\.eventType)) == ["package", "smartDetectZone"])
 
         #expect(FileManager.default.fileExists(atPath: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("events-response.json").path))
         #expect(FileManager.default.fileExists(atPath: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("cameras-response.json").path))
@@ -922,6 +1083,10 @@ struct ProtectCadenceCoreTests {
         #expect(first.insertedRowCount == 5)
         #expect(first.ignoredEventCount == 1)
         #expect(second.insertedRowCount == 0)
+
+        let recent = try database.fetchRecent(RecentEventsRequest(limit: 10))
+        #expect(Set(recent.compactMap(\.cameraID)) == ["camera-001", "camera-002"])
+        #expect(Set(recent.compactMap(\.eventType)) == ["package", "smartDetectZone"])
     }
 
     @Test

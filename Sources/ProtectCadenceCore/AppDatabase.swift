@@ -42,7 +42,9 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
     public let id: Int64?
     public let timeStart: Date
     public let timeEnd: Date?
+    public let cameraID: String?
     public let camera: String
+    public let eventType: String?
     public let kind: String
     public let eventID: String
 
@@ -50,14 +52,18 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         id: Int64? = nil,
         timeStart: Date,
         timeEnd: Date? = nil,
+        cameraID: String? = nil,
         camera: String,
+        eventType: String? = nil,
         kind: String,
         eventID: String
     ) {
         self.id = id
         self.timeStart = timeStart
         self.timeEnd = timeEnd
+        self.cameraID = cameraID
         self.camera = camera
+        self.eventType = eventType
         self.kind = kind
         self.eventID = eventID
     }
@@ -66,7 +72,9 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         public static let id = Column("id")
         public static let timeStart = Column("time_start")
         public static let timeEnd = Column("time_end")
+        public static let cameraID = Column("camera_id")
         public static let camera = Column("camera")
+        public static let eventType = Column("event_type")
         public static let kind = Column("kind")
         public static let eventID = Column("event_id")
     }
@@ -75,7 +83,9 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         case id
         case timeStart
         case timeEnd
+        case cameraID
         case camera
+        case eventType
         case kind
         case eventID
     }
@@ -84,7 +94,9 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         id = row["id"]
         timeStart = row["time_start"]
         timeEnd = row["time_end"]
+        cameraID = row["camera_id"]
         camera = row["camera"]
+        eventType = row["event_type"]
         kind = row["kind"]
         eventID = row["event_id"]
     }
@@ -93,7 +105,9 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         container["id"] = id
         container["time_start"] = timeStart
         container["time_end"] = timeEnd
+        container["camera_id"] = cameraID
         container["camera"] = camera
+        container["event_type"] = eventType
         container["kind"] = kind
         container["event_id"] = eventID
     }
@@ -351,26 +365,48 @@ public final class ProtectCadenceDatabase {
             let columnNames = try db.columns(in: EventRow.databaseTableName).map(\.name)
             let hasCurrentShape = columnNames.contains("time_start")
                 && columnNames.contains("time_end")
+                && columnNames.contains("camera_id")
+                && columnNames.contains("event_type")
                 && columnNames.contains("event_id")
 
             guard !hasCurrentShape else {
                 return
             }
 
+            let hasLegacyBootstrapShape = columnNames.contains("ts") && columnNames.contains("sourceEventID")
+            let hasPreHardeningCurrentShape = columnNames.contains("time_start")
+                && columnNames.contains("time_end")
+                && columnNames.contains("event_id")
+
             try db.create(table: "events_v2") { table in
                 table.autoIncrementedPrimaryKey("id")
                 table.column("time_start", .datetime).notNull().indexed()
                 table.column("time_end", .datetime)
+                table.column("camera_id", .text).indexed()
                 table.column("camera", .text).notNull().indexed()
+                table.column("event_type", .text)
                 table.column("kind", .text).notNull().indexed()
                 table.column("event_id", .text).notNull()
             }
 
-            try db.execute(sql: """
-                INSERT INTO events_v2 (id, time_start, time_end, camera, kind, event_id)
-                SELECT id, ts, NULL, camera, kind, sourceEventID
-                FROM events
-                """)
+            if hasLegacyBootstrapShape {
+                try db.execute(sql: """
+                    INSERT INTO events_v2 (id, time_start, time_end, camera_id, camera, event_type, kind, event_id)
+                    SELECT id, ts, NULL, NULL, camera, NULL, kind, sourceEventID
+                    FROM events
+                    """)
+            } else if hasPreHardeningCurrentShape {
+                try db.execute(sql: """
+                    INSERT INTO events_v2 (id, time_start, time_end, camera_id, camera, event_type, kind, event_id)
+                    SELECT id, time_start, time_end, NULL, camera, NULL, kind, event_id
+                    FROM events
+                    """)
+            } else {
+                throw DatabaseError(
+                    resultCode: .SQLITE_ERROR,
+                    message: "unsupported existing events table shape during reshapeEventsForKindRows"
+                )
+            }
 
             try db.drop(table: EventRow.databaseTableName)
             try db.rename(table: "events_v2", to: EventRow.databaseTableName)
@@ -382,6 +418,31 @@ public final class ProtectCadenceDatabase {
             )
         }
 
+        migrator.registerMigration("addCameraIDAndEventType") { db in
+            guard try db.tableExists(EventRow.databaseTableName) else {
+                try createCurrentEventsTable(in: db)
+                return
+            }
+
+            let columnNames = Set(try db.columns(in: EventRow.databaseTableName).map(\.name))
+
+            if !columnNames.contains("camera_id") {
+                try db.alter(table: EventRow.databaseTableName) { table in
+                    table.add(column: "camera_id", .text)
+                }
+                try db.execute(sql: """
+                    CREATE INDEX IF NOT EXISTS events_on_camera_id
+                    ON \(EventRow.databaseTableName) (camera_id)
+                    """)
+            }
+
+            if !columnNames.contains("event_type") {
+                try db.alter(table: EventRow.databaseTableName) { table in
+                    table.add(column: "event_type", .text)
+                }
+            }
+        }
+
         return migrator
     }
 
@@ -390,7 +451,9 @@ public final class ProtectCadenceDatabase {
             table.autoIncrementedPrimaryKey("id")
             table.column("time_start", .datetime).notNull().indexed()
             table.column("time_end", .datetime)
+            table.column("camera_id", .text).indexed()
             table.column("camera", .text).notNull().indexed()
+            table.column("event_type", .text)
             table.column("kind", .text).notNull().indexed()
             table.column("event_id", .text).notNull()
         }

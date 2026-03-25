@@ -12,6 +12,10 @@ The current repo is still early, but it already supports:
 
 The ingest path is still intentionally small: login, fetch recent settled events, normalize them, insert deduplicated rows, and optionally write sanitized API snapshots for tests.
 
+Current project version: `0.9.0`.
+
+This repo uses a single top-level `VERSION` file as its lightweight release marker. There is no separate metadata system yet.
+
 ## What It Stores
 
 The project treats cameras as sensors, not as video sources.
@@ -20,11 +24,21 @@ Each normalized row currently stores:
 
 - `time_start`
 - `time_end`
+- `camera_id`
 - `camera`
+- `event_type`
 - `kind`
 - `event_id`
 
 One Protect event can become multiple rows if it contains multiple smart-detect kinds such as `person` and `vehicle`.
+
+Field intent:
+
+- `camera_id` keeps the stable Protect camera identifier when the payload exposes one
+- `camera` remains the human-readable camera name used for inspection and grouping
+- `event_type` preserves the original Protect event type such as `smartDetectZone` or `smartDetectLine`
+
+The schema does not yet encode controller or source identity. If this repo starts ingesting multiple controllers, that may need an explicit schema decision later.
 
 ## Requirements
 
@@ -261,6 +275,8 @@ All current commands default to JSON output.
 - `databasePath`
 - optional `window`
 - `events`
+
+Each event row includes `timeStart`, `timeEnd`, `cameraID`, `camera`, `eventType`, `kind`, and `eventID`.
 
 `summary` returns:
 

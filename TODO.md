@@ -44,6 +44,7 @@
 - Decide whether `event_id + kind` is the right long-term dedupe key after seeing real Protect payloads.
 - If query pressure grows, prefer indexes and clear SQL over schema growth first.
 - If Protect identity semantics are messy, prefer a narrow explicit ingest-side solution over broad schema growth.
+- If this repo starts ingesting multiple controllers or other sources, decide whether controller/source identity belongs in the base schema or at an ingest boundary. Do not guess at that shape early.
 
 ### Tests and fixtures
 
@@ -53,7 +54,7 @@
 ## Current State
 
 - SQLite database and migrations exist.
-- Base event schema is `time_start`, `time_end`, `camera`, `kind`, `event_id`.
+- Base event schema is `time_start`, `time_end`, `camera_id`, `camera`, `event_type`, `kind`, `event_id`.
 - One Protect event can normalize into multiple rows.
 - `protect-cadence-ingest --last-hours <n>` fetches bounded recent events from a Protect controller.
 - `protect-cadence-ingest --event-json <file>` replays one event object or an array of event objects.

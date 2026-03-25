@@ -150,6 +150,8 @@ public enum ProtectEventNormalizer {
             throw ProtectEventNormalizationError.missingCameraName
         }
 
+        let cameraID = payload.cameraLookupKey
+
         let kinds = normalizedKinds(from: payload)
         guard !kinds.isEmpty else {
             return []
@@ -159,7 +161,9 @@ public enum ProtectEventNormalizer {
             EventRow(
                 timeStart: timeStart,
                 timeEnd: payload.end,
+                cameraID: cameraID,
                 camera: camera,
+                eventType: payload.type,
                 kind: kind,
                 eventID: eventID
             )
