@@ -47,10 +47,43 @@ The schema does not yet encode controller or source identity. If this repo start
 
 ## Build And Test
 
+Recommended local workflow for this repo:
+
 ```bash
-swift build
-swift test
+make build
+make test
 ```
+
+That keeps build products in a visible `build/` directory instead of SwiftPM's default hidden `.build/` path.
+
+If you prefer raw SwiftPM commands, use:
+
+```bash
+swift build --build-path build
+swift test --build-path build
+```
+
+Plain `swift build` still works, but SwiftPM will then use `.build/`.
+
+## Install The Binary
+
+There is now a small install target for local use:
+
+```bash
+make install
+```
+
+By default this installs the release binary to `~/bin/protect-cadence`.
+
+Useful variants:
+
+```bash
+BINDIR="$HOME/.local/bin" make install
+make release
+make show-bin
+```
+
+If `~/bin` is not already on your `PATH`, add it before expecting `protect-cadence` to resolve globally.
 
 ## Database Location
 
