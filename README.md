@@ -64,15 +64,18 @@ Live ingest uses this auth resolution order:
 
 - explicit CLI flags
 - environment variables
-- `~/Library/Application Support/protect-cadence/config.json` plus macOS Keychain
+- `~/Library/Application Support/protect-cadence/config.json`
 
-The config file stores only:
+The config file stores:
 
 - `controllerURL`
 - `username`
+- `password`
 - `allowInsecureTLS`
 
-The Protect password is stored separately in the macOS Keychain.
+The config file is written with `0600` permissions, and its parent directory is tightened to `0700`.
+
+This keeps unattended local execution simple: one config file, no separate secret store, and no Keychain dependency.
 
 Supported auth env vars remain:
 
@@ -188,10 +191,24 @@ Behavior:
 - `auth` with no subcommand behaves like `auth status`
 - `auth login` accepts `--controller-url`, `--username`, `--password`, and `--allow-insecure-tls`
 - `auth login` prompts for any missing controller URL or username, and prompts for the password if it is not supplied by flag or env var
-- `auth status` reports whether the config file exists and whether a matching Keychain password is available
-- `auth clear` removes the config file and deletes the matching Keychain password
+- `auth login` stores the password in the config file
+- `auth status` reports whether the config file exists and whether it currently includes a stored password
+- `auth clear` removes the config file
 - `auth clear --force` skips the confirmation prompt
 - all auth subcommands accept `--config /path/to/config.json`
+
+Current config file shape:
+
+```json
+{
+  "allowInsecureTLS": false,
+  "controllerURL": "https://protect.local",
+  "password": "local-password",
+  "username": "local-user"
+}
+```
+
+For unattended local runs, point cron or `launchd` at the same config path and avoid interactive secret sources.
 
 ## Example Fixture
 

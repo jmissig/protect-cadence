@@ -1,15 +1,21 @@
 import Darwin
 import Foundation
-import Security
 
 public struct ProtectCadenceConfig: Codable, Sendable, Equatable {
     public let controllerURL: String
     public let username: String
+    public let password: String?
     public let allowInsecureTLS: Bool
 
-    public init(controllerURL: String, username: String, allowInsecureTLS: Bool = false) {
+    public init(
+        controllerURL: String,
+        username: String,
+        password: String? = nil,
+        allowInsecureTLS: Bool = false
+    ) {
         self.controllerURL = controllerURL
         self.username = username
+        self.password = password
         self.allowInsecureTLS = allowInsecureTLS
     }
 }
@@ -39,6 +45,8 @@ public enum ProtectCadenceConfigStore {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(config)
         try data.write(to: url)
+        try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.deletingLastPathComponent().path)
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
     public static func delete(
@@ -51,96 +59,6 @@ public enum ProtectCadenceConfigStore {
         }
 
         try fileManager.removeItem(at: url)
-    }
-}
-
-public protocol ProtectPasswordStore: Sendable {
-    func readPassword(controllerURL: URL, username: String) throws -> String?
-    func savePassword(_ password: String, controllerURL: URL, username: String) throws
-    func deletePassword(controllerURL: URL, username: String) throws
-}
-
-public enum ProtectPasswordStoreError: Error, CustomStringConvertible {
-    case unexpectedStatus(OSStatus, String)
-    case invalidPasswordEncoding
-
-    public var description: String {
-        switch self {
-        case let .unexpectedStatus(status, operation):
-            let message = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
-            return "Keychain \(operation) failed: \(message)"
-        case .invalidPasswordEncoding:
-            return "password could not be decoded from Keychain data"
-        }
-    }
-}
-
-public struct MacOSKeychainPasswordStore: ProtectPasswordStore {
-    private static let service = "protect-cadence"
-
-    public init() {}
-
-    public func readPassword(controllerURL: URL, username: String) throws -> String? {
-        var query = baseQuery(controllerURL: controllerURL, username: username)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        switch status {
-        case errSecSuccess:
-            guard let data = result as? Data, let password = String(data: data, encoding: .utf8) else {
-                throw ProtectPasswordStoreError.invalidPasswordEncoding
-            }
-            return password
-        case errSecItemNotFound:
-            return nil
-        default:
-            throw ProtectPasswordStoreError.unexpectedStatus(status, "read")
-        }
-    }
-
-    public func savePassword(_ password: String, controllerURL: URL, username: String) throws {
-        let data = Data(password.utf8)
-        let query = baseQuery(controllerURL: controllerURL, username: username)
-        let attributes = [kSecValueData as String: data]
-        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-
-        switch updateStatus {
-        case errSecSuccess:
-            return
-        case errSecItemNotFound:
-            var createQuery = query
-            createQuery[kSecValueData as String] = data
-            let createStatus = SecItemAdd(createQuery as CFDictionary, nil)
-            guard createStatus == errSecSuccess else {
-                throw ProtectPasswordStoreError.unexpectedStatus(createStatus, "save")
-            }
-        default:
-            throw ProtectPasswordStoreError.unexpectedStatus(updateStatus, "save")
-        }
-    }
-
-    public func deletePassword(controllerURL: URL, username: String) throws {
-        let status = SecItemDelete(baseQuery(controllerURL: controllerURL, username: username) as CFDictionary)
-        switch status {
-        case errSecSuccess, errSecItemNotFound:
-            return
-        default:
-            throw ProtectPasswordStoreError.unexpectedStatus(status, "delete")
-        }
-    }
-
-    private func baseQuery(controllerURL: URL, username: String) -> [String: Any] {
-        [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: Self.service,
-            kSecAttrAccount as String: Self.keychainAccount(controllerURL: controllerURL, username: username),
-        ]
-    }
-
-    static func keychainAccount(controllerURL: URL, username: String) -> String {
-        "\(username)@\(normalizedControllerURLString(controllerURL))"
     }
 }
 
@@ -159,7 +77,7 @@ public enum ProtectAuthResolutionError: Error, CustomStringConvertible {
         case .missingUsername:
             return "missing Protect username; provide --username, PROTECT_USERNAME, or run 'protect-cadence auth login'"
         case .missingPassword:
-            return "missing Protect password; provide --password, PROTECT_PASSWORD, or run 'protect-cadence auth login'"
+            return "missing Protect password; provide --password, PROTECT_PASSWORD, or save it with 'protect-cadence auth login'"
         case let .invalidControllerURL(value):
             return "invalid controller URL '\(value)'"
         case let .inputUnavailable(field):
@@ -195,7 +113,7 @@ public struct ProtectAuthStatus: Sendable, Equatable {
     public let controllerURL: URL?
     public let username: String?
     public let allowInsecureTLS: Bool?
-    public let keychainSecretExists: Bool
+    public let storedPasswordExists: Bool
 
     public init(
         configPath: String,
@@ -203,14 +121,14 @@ public struct ProtectAuthStatus: Sendable, Equatable {
         controllerURL: URL?,
         username: String?,
         allowInsecureTLS: Bool?,
-        keychainSecretExists: Bool
+        storedPasswordExists: Bool
     ) {
         self.configPath = configPath
         self.configExists = configExists
         self.controllerURL = controllerURL
         self.username = username
         self.allowInsecureTLS = allowInsecureTLS
-        self.keychainSecretExists = keychainSecretExists
+        self.storedPasswordExists = storedPasswordExists
     }
 }
 
@@ -285,16 +203,14 @@ public enum ProtectAuthResolver {
     public static func resolveControllerConfiguration(
         overrides: ProtectAuthOverrides = ProtectAuthOverrides(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        configPath: String = ProtectCadencePaths.defaultConfigPath(),
-        passwordStore: ProtectPasswordStore = MacOSKeychainPasswordStore()
+        configPath: String = ProtectCadencePaths.defaultConfigPath()
     ) throws -> ProtectControllerConfiguration {
         let config = try ProtectCadenceConfigStore.load(from: configPath)
         let status = try currentStatus(
             overrides: overrides,
             environment: environment,
             configPath: configPath,
-            config: config,
-            passwordStore: passwordStore
+            config: config
         )
 
         guard let controllerURL = status.controllerURL else {
@@ -308,9 +224,7 @@ public enum ProtectAuthResolver {
         let password = try resolvedPassword(
             overrides: overrides,
             environment: environment,
-            controllerURL: controllerURL,
-            username: username,
-            passwordStore: passwordStore
+            config: config
         )
 
         return ProtectControllerConfiguration(
@@ -325,8 +239,7 @@ public enum ProtectAuthResolver {
         overrides: ProtectAuthOverrides = ProtectAuthOverrides(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
         configPath: String = ProtectCadencePaths.defaultConfigPath(),
-        config: ProtectCadenceConfig? = nil,
-        passwordStore: ProtectPasswordStore = MacOSKeychainPasswordStore()
+        config: ProtectCadenceConfig? = nil
     ) throws -> ProtectAuthStatus {
         let resolvedConfig = try config ?? ProtectCadenceConfigStore.load(from: configPath)
         let configExists = resolvedConfig != nil
@@ -357,12 +270,9 @@ public enum ProtectAuthResolver {
             controllerURL = nil
         }
 
-        let keychainSecretExists: Bool
-        if let controllerURL, let username, !username.isEmpty {
-            keychainSecretExists = try passwordStore.readPassword(controllerURL: controllerURL, username: username) != nil
-        } else {
-            keychainSecretExists = false
-        }
+        let storedPasswordExists = controllerURL != nil
+            && username?.isEmpty == false
+            && resolvedConfig.map(usesStoredConfigPassword) == true
 
         return ProtectAuthStatus(
             configPath: configPath,
@@ -370,7 +280,7 @@ public enum ProtectAuthResolver {
             controllerURL: controllerURL,
             username: username,
             allowInsecureTLS: allowInsecureTLS,
-            keychainSecretExists: keychainSecretExists
+            storedPasswordExists: storedPasswordExists
         )
     }
 
@@ -378,7 +288,6 @@ public enum ProtectAuthResolver {
         overrides: ProtectAuthOverrides = ProtectAuthOverrides(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
         configPath: String = ProtectCadencePaths.defaultConfigPath(),
-        passwordStore: ProtectPasswordStore = MacOSKeychainPasswordStore(),
         prompter: ProtectAuthPrompter = ConsoleProtectAuthPrompter(),
         fileManager: FileManager = .default
     ) throws -> ProtectAuthStatus {
@@ -387,8 +296,7 @@ public enum ProtectAuthResolver {
             overrides: overrides,
             environment: environment,
             configPath: configPath,
-            config: existingConfig,
-            passwordStore: passwordStore
+            config: existingConfig
         )
 
         let controllerURLString = try resolvedValue(
@@ -418,23 +326,16 @@ public enum ProtectAuthResolver {
         let newConfig = ProtectCadenceConfig(
             controllerURL: normalizedControllerURLString(controllerURL),
             username: username,
+            password: password,
             allowInsecureTLS: allowInsecureTLS
         )
 
-        if let existingConfig,
-           existingConfig.controllerURL != newConfig.controllerURL || existingConfig.username != newConfig.username,
-           let existingURL = URL(string: existingConfig.controllerURL) {
-            try passwordStore.deletePassword(controllerURL: existingURL, username: existingConfig.username)
-        }
-
         try ProtectCadenceConfigStore.save(newConfig, to: configPath, fileManager: fileManager)
-        try passwordStore.savePassword(password, controllerURL: controllerURL, username: username)
 
         return try currentStatus(
             environment: environment,
             configPath: configPath,
-            config: newConfig,
-            passwordStore: passwordStore
+            config: newConfig
         )
     }
 
@@ -443,41 +344,17 @@ public enum ProtectAuthResolver {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         configPath: String = ProtectCadencePaths.defaultConfigPath(),
         force: Bool = false,
-        passwordStore: ProtectPasswordStore = MacOSKeychainPasswordStore(),
         prompter: ProtectAuthPrompter = ConsoleProtectAuthPrompter(),
         fileManager: FileManager = .default
     ) throws -> ProtectAuthStatus {
         let config = try ProtectCadenceConfigStore.load(from: configPath)
         let configExists = config != nil
 
-        let controllerURLString = firstNonEmpty(
-            config?.controllerURL,
-            overrides.controllerURL,
-            environment["PROTECT_CONTROLLER_URL"]
-        )
-        let username = firstNonEmpty(
-            config?.username,
-            overrides.username,
-            environment["PROTECT_USERNAME"]
-        )
-
         if !force {
-            var targetDescription = configPath
-            if let username {
-                targetDescription += " and stored password for \(username)"
-            }
-
-            let confirmed = try prompter.confirm("Clear \(targetDescription)?")
+            let confirmed = try prompter.confirm("Clear \(configPath)?")
             guard confirmed else {
                 throw ProtectAuthResolutionError.confirmationDeclined
             }
-        }
-
-        if let controllerURLString,
-           let controllerURL = URL(string: controllerURLString),
-           let username,
-           !username.isEmpty {
-            try passwordStore.deletePassword(controllerURL: controllerURL, username: username)
         }
 
         if configExists {
@@ -490,7 +367,7 @@ public enum ProtectAuthResolver {
             controllerURL: nil,
             username: nil,
             allowInsecureTLS: nil,
-            keychainSecretExists: false
+            storedPasswordExists: false
         )
     }
 
@@ -510,19 +387,40 @@ public enum ProtectAuthResolver {
     private static func resolvedPassword(
         overrides: ProtectAuthOverrides,
         environment: [String: String],
-        controllerURL: URL,
-        username: String,
-        passwordStore: ProtectPasswordStore
+        config: ProtectCadenceConfig?
     ) throws -> String {
         if let password = firstNonEmpty(overrides.password, environment["PROTECT_PASSWORD"]) {
             return password
         }
 
-        if let password = try passwordStore.readPassword(controllerURL: controllerURL, username: username), !password.isEmpty {
+        if let password = storedPassword(config: config) {
             return password
         }
 
         throw ProtectAuthResolutionError.missingPassword
+    }
+
+    private static func storedPassword(
+        config: ProtectCadenceConfig?
+    ) -> String? {
+        guard let config,
+              usesStoredConfigPassword(config),
+              let password = config.password?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !password.isEmpty else {
+            return nil
+        }
+
+        return password
+    }
+
+    private static func usesStoredConfigPassword(
+        _ config: ProtectCadenceConfig
+    ) -> Bool {
+        guard let password = config.password?.trimmingCharacters(in: .whitespacesAndNewlines), !password.isEmpty else {
+            return false
+        }
+
+        return true
     }
 
     private static func resolvedPasswordForLogin(

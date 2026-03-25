@@ -29,7 +29,7 @@ public struct AuthCommandResponse: Codable, Sendable, Equatable {
     public let status: String
     public let configPath: String
     public let configExists: Bool
-    public let keychainSecretExists: Bool
+    public let storedPasswordExists: Bool
     public let controllerURL: String?
     public let username: String?
     public let allowInsecureTLS: Bool?
@@ -41,7 +41,7 @@ public struct AuthCommandResponse: Codable, Sendable, Equatable {
         status: String,
         configPath: String,
         configExists: Bool,
-        keychainSecretExists: Bool,
+        storedPasswordExists: Bool,
         controllerURL: String?,
         username: String?,
         allowInsecureTLS: Bool?,
@@ -52,7 +52,7 @@ public struct AuthCommandResponse: Codable, Sendable, Equatable {
         self.status = status
         self.configPath = configPath
         self.configExists = configExists
-        self.keychainSecretExists = keychainSecretExists
+        self.storedPasswordExists = storedPasswordExists
         self.controllerURL = controllerURL
         self.username = username
         self.allowInsecureTLS = allowInsecureTLS
@@ -81,7 +81,6 @@ public enum ProtectCadenceAuthRunner {
     public static func run(
         arguments: [String],
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        passwordStore: ProtectPasswordStore = MacOSKeychainPasswordStore(),
         prompter: ProtectAuthPrompter = ConsoleProtectAuthPrompter(),
         fileManager: FileManager = .default
     ) throws -> AuthCommandResponse {
@@ -93,7 +92,6 @@ public enum ProtectCadenceAuthRunner {
                 overrides: cli.overrides,
                 environment: environment,
                 configPath: cli.configPath,
-                passwordStore: passwordStore,
                 prompter: prompter,
                 fileManager: fileManager
             )
@@ -101,20 +99,19 @@ public enum ProtectCadenceAuthRunner {
                 action: cli.action.rawValue,
                 state: status,
                 status: "configured",
-                message: "saved Protect controller config and password"
+                message: "saved Protect controller credentials in the config file"
             )
         case .status:
             let status = try ProtectAuthResolver.currentStatus(
                 overrides: cli.overrides,
                 environment: environment,
-                configPath: cli.configPath,
-                passwordStore: passwordStore
+                configPath: cli.configPath
             )
             let message: String
-            if status.configExists, status.keychainSecretExists {
-                message = "config file and matching Keychain password are available"
+            if status.configExists, status.storedPasswordExists {
+                message = "config file and stored password are available"
             } else if status.configExists {
-                message = "config file is available, but the matching Keychain password is missing"
+                message = "config file is available, but the stored password is missing"
             } else {
                 message = "config file is missing"
             }
@@ -131,7 +128,6 @@ public enum ProtectCadenceAuthRunner {
                 environment: environment,
                 configPath: cli.configPath,
                 force: cli.force,
-                passwordStore: passwordStore,
                 prompter: prompter,
                 fileManager: fileManager
             )
@@ -139,7 +135,7 @@ public enum ProtectCadenceAuthRunner {
                 action: cli.action.rawValue,
                 state: status,
                 status: "cleared",
-                message: "removed config file and matching Keychain password"
+                message: "removed config file"
             )
         }
     }
@@ -156,7 +152,7 @@ public enum ProtectCadenceAuthRunner {
             status: status,
             configPath: state.configPath,
             configExists: state.configExists,
-            keychainSecretExists: state.keychainSecretExists,
+            storedPasswordExists: state.storedPasswordExists,
             controllerURL: state.controllerURL.map(normalizedControllerURLString),
             username: state.username,
             allowInsecureTLS: state.allowInsecureTLS,

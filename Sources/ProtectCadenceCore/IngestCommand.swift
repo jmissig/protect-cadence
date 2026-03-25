@@ -184,7 +184,6 @@ public enum ProtectCadenceIngestRunner {
         arguments: [String],
         now: Date = Date(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        passwordStore: ProtectPasswordStore = MacOSKeychainPasswordStore(),
         clientFactory: @Sendable (ProtectControllerConfiguration) -> ProtectControllerClient = { configuration in
             ProtectControllerClient(configuration: configuration)
         }
@@ -204,8 +203,7 @@ public enum ProtectCadenceIngestRunner {
                     allowInsecureTLS: cli.allowInsecureTLS
                 ),
                 environment: environment,
-                configPath: cli.configPath,
-                passwordStore: passwordStore
+                configPath: cli.configPath
             )
             let client = clientFactory(configuration)
             service = ProtectIngestService(database: database, client: client)

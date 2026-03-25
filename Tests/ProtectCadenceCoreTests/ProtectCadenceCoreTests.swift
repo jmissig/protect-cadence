@@ -139,28 +139,21 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
-    func authResolverUsesConfigAndKeychainWhenEnvIsAbsent() throws {
+    func authResolverUsesConfigPasswordWhenEnvIsAbsent() throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
         try ProtectCadenceConfigStore.save(
             ProtectCadenceConfig(
                 controllerURL: "https://config.example",
                 username: "config-user",
+                password: "config-pass",
                 allowInsecureTLS: true
             ),
             to: configPath
         )
 
-        let passwordStore = TestPasswordStore()
-        try passwordStore.savePassword(
-            "config-pass",
-            controllerURL: URL(string: "https://config.example")!,
-            username: "config-user"
-        )
-
         let configuration = try ProtectAuthResolver.resolveControllerConfiguration(
             environment: [:],
-            configPath: configPath,
-            passwordStore: passwordStore
+            configPath: configPath
         )
 
         #expect(configuration.controllerURL.absoluteString == "https://config.example")
@@ -176,16 +169,10 @@ struct ProtectCadenceCoreTests {
             ProtectCadenceConfig(
                 controllerURL: "https://config.example",
                 username: "config-user",
+                password: "config-pass",
                 allowInsecureTLS: false
             ),
             to: configPath
-        )
-
-        let passwordStore = TestPasswordStore()
-        try passwordStore.savePassword(
-            "config-pass",
-            controllerURL: URL(string: "https://config.example")!,
-            username: "config-user"
         )
 
         let configuration = try ProtectAuthResolver.resolveControllerConfiguration(
@@ -199,8 +186,7 @@ struct ProtectCadenceCoreTests {
                 "PROTECT_PASSWORD": "env-pass",
                 "PROTECT_ALLOW_INSECURE_TLS": "1",
             ],
-            configPath: configPath,
-            passwordStore: passwordStore
+            configPath: configPath
         )
 
         #expect(configuration.controllerURL.absoluteString == "https://flag.example")
@@ -210,9 +196,34 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
-    func authLoginPromptsWritesConfigAndStoresPassword() throws {
+    func authResolverRequiresConfigPasswordWhenEnvIsAbsent() throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
-        let passwordStore = TestPasswordStore()
+        try ProtectCadenceConfigStore.save(
+            ProtectCadenceConfig(
+                controllerURL: "https://legacy.example",
+                username: "legacy-user",
+                allowInsecureTLS: false
+            ),
+            to: configPath
+        )
+
+        let status = try ProtectAuthResolver.currentStatus(
+            environment: [:],
+            configPath: configPath
+        )
+
+        #expect(status.storedPasswordExists == false)
+        #expect(throws: ProtectAuthResolutionError.self) {
+            _ = try ProtectAuthResolver.resolveControllerConfiguration(
+                environment: [:],
+                configPath: configPath
+            )
+        }
+    }
+
+    @Test
+    func authLoginPromptsAndWritesConfig() throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
         let prompter = TestPrompter(
             prompts: [
                 "https://protect.example",
@@ -224,14 +235,13 @@ struct ProtectCadenceCoreTests {
         let response = try ProtectCadenceAuthRunner.run(
             arguments: ["login", "--config", configPath],
             environment: [:],
-            passwordStore: passwordStore,
             prompter: prompter
         )
 
         #expect(response.action == "login")
         #expect(response.status == "configured")
         #expect(response.configExists == true)
-        #expect(response.keychainSecretExists == true)
+        #expect(response.storedPasswordExists == true)
         #expect(response.controllerURL == "https://protect.example")
         #expect(response.username == "local-user")
 
@@ -239,85 +249,78 @@ struct ProtectCadenceCoreTests {
         #expect(config == ProtectCadenceConfig(
             controllerURL: "https://protect.example",
             username: "local-user",
+            password: "local-pass",
             allowInsecureTLS: false
         ))
-        #expect(
-            try passwordStore.readPassword(
-                controllerURL: URL(string: "https://protect.example")!,
-                username: "local-user"
-            ) == "local-pass"
-        )
     }
 
     @Test
-    func authStatusReportsConfigAndMatchingKeychainPassword() throws {
+    func authStatusReportsConfigAndStoredPassword() throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
         try ProtectCadenceConfigStore.save(
             ProtectCadenceConfig(
                 controllerURL: "https://protect.example",
                 username: "status-user",
+                password: "stored-pass",
                 allowInsecureTLS: true
             ),
             to: configPath
         )
 
-        let passwordStore = TestPasswordStore()
-        try passwordStore.savePassword(
-            "stored-pass",
-            controllerURL: URL(string: "https://protect.example")!,
-            username: "status-user"
-        )
-
         let output = try ProtectCadenceAuthRunner.run(
             arguments: ["status", "--config", configPath],
             environment: [:],
-            passwordStore: passwordStore,
             prompter: TestPrompter()
         )
 
         #expect(output.action == "status")
         #expect(output.status == "ok")
         #expect(output.configExists == true)
-        #expect(output.keychainSecretExists == true)
+        #expect(output.storedPasswordExists == true)
         #expect(output.allowInsecureTLS == true)
     }
 
     @Test
-    func authClearDeletesConfigAndMatchingPassword() throws {
+    func configStoreWritesRestrictedPermissions() throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
         try ProtectCadenceConfigStore.save(
             ProtectCadenceConfig(
                 controllerURL: "https://protect.example",
-                username: "clear-user"
+                username: "perm-user",
+                password: "perm-pass"
             ),
             to: configPath
         )
 
-        let passwordStore = TestPasswordStore()
-        try passwordStore.savePassword(
-            "clear-pass",
-            controllerURL: URL(string: "https://protect.example")!,
-            username: "clear-user"
+        let attributes = try FileManager.default.attributesOfItem(atPath: configPath)
+        let permissions = attributes[.posixPermissions] as? NSNumber
+
+        #expect(permissions?.intValue == 0o600)
+    }
+
+    @Test
+    func authClearDeletesConfig() throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        try ProtectCadenceConfigStore.save(
+            ProtectCadenceConfig(
+                controllerURL: "https://protect.example",
+                username: "clear-user",
+                password: "clear-pass"
+            ),
+            to: configPath
         )
 
         let output = try ProtectCadenceAuthRunner.run(
             arguments: ["clear", "--config", configPath, "--force"],
             environment: [:],
-            passwordStore: passwordStore,
             prompter: TestPrompter()
         )
 
         #expect(output.action == "clear")
         #expect(output.status == "cleared")
         #expect(output.configExists == false)
-        #expect(output.keychainSecretExists == false)
+        #expect(output.storedPasswordExists == false)
         #expect((try? ProtectCadenceConfigStore.load(from: configPath)) == nil)
-        #expect(
-            try passwordStore.readPassword(
-                controllerURL: URL(string: "https://protect.example")!,
-                username: "clear-user"
-            ) == nil
-        )
     }
 
     @Test
@@ -760,23 +763,16 @@ struct ProtectCadenceCoreTests {
         try ProtectCadenceConfigStore.save(
             ProtectCadenceConfig(
                 controllerURL: "https://protect.example",
-                username: "cli-user"
+                username: "cli-user",
+                password: "cli-pass"
             ),
             to: configPath
-        )
-
-        let passwordStore = TestPasswordStore()
-        try passwordStore.savePassword(
-            "cli-pass",
-            controllerURL: URL(string: "https://protect.example")!,
-            username: "cli-user"
         )
 
         let output = try ProtectCadenceCLIOutput.auth(
             ProtectCadenceAuthRunner.run(
                 arguments: ["status", "--config", configPath],
                 environment: [:],
-                passwordStore: passwordStore,
                 prompter: TestPrompter()
             )
         )
@@ -792,22 +788,16 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
-    func ingestRunnerUsesResolvedConfigAndKeychainPassword() async throws {
+    func ingestRunnerUsesResolvedConfigPassword() async throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
         let databasePath = temporaryDatabasePath()
         try ProtectCadenceConfigStore.save(
             ProtectCadenceConfig(
                 controllerURL: "https://protect.example",
-                username: "ingest-user"
+                username: "ingest-user",
+                password: "ingest-pass"
             ),
             to: configPath
-        )
-
-        let passwordStore = TestPasswordStore()
-        try passwordStore.savePassword(
-            "ingest-pass",
-            controllerURL: URL(string: "https://protect.example")!,
-            username: "ingest-user"
         )
 
         let transport = RecordingProtectHTTPTransport(
@@ -837,7 +827,6 @@ struct ProtectCadenceCoreTests {
             arguments: ["--db", databasePath, "--config", configPath, "--last-hours", "1"],
             now: Date(timeIntervalSince1970: 1_710_003_600),
             environment: [:],
-            passwordStore: passwordStore,
             clientFactory: { configuration in
                 #expect(configuration.username == "ingest-user")
                 #expect(configuration.password == "ingest-pass")
@@ -1290,26 +1279,6 @@ private actor RecordingProtectHTTPTransport: ProtectHTTPTransport {
 
     func recordedRequests() -> [URLRequest] {
         requests
-    }
-}
-
-private final class TestPasswordStore: ProtectPasswordStore, @unchecked Sendable {
-    private var passwords: [String: String] = [:]
-
-    func readPassword(controllerURL: URL, username: String) throws -> String? {
-        passwords[key(controllerURL: controllerURL, username: username)]
-    }
-
-    func savePassword(_ password: String, controllerURL: URL, username: String) throws {
-        passwords[key(controllerURL: controllerURL, username: username)] = password
-    }
-
-    func deletePassword(controllerURL: URL, username: String) throws {
-        passwords.removeValue(forKey: key(controllerURL: controllerURL, username: username))
-    }
-
-    private func key(controllerURL: URL, username: String) -> String {
-        MacOSKeychainPasswordStore.keychainAccount(controllerURL: controllerURL, username: username)
     }
 }
 
