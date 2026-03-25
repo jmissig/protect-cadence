@@ -15,9 +15,9 @@
   },
   {
     "camera" : {
-      "displayName" : "Camera 002",
+      "displayName" : "Entry 02",
       "id" : "camera-002",
-      "name" : "Camera 002"
+      "name" : "Entry 02"
     },
     "detectedAt" : "2024-03-09T16:01:44Z",
     "end" : "2024-03-09T16:01:49Z",

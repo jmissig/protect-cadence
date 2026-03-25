@@ -60,6 +60,24 @@ The machine-readable companion snapshot lives at `Tests/Fixtures/ProtectAPI/sche
 - a string camera identifier
 - an embedded object with `id`, `displayName`, and `name`
 
+## Observed Live Capture Notes
+
+The sanitized live capture in `Tests/Fixtures/ProtectAPIReal/` differs from the broader synthetic baseline in a few useful ways.
+
+Observed in the March 24, 2026 capture:
+
+- event-list rows used `id` but did not include `eventId`
+- event-list rows used `start` and `end` but did not include `detectedAt`
+- event-list rows used string `camera` identifiers and did not include embedded camera objects
+- event-list rows in that capture did not include `cameraId`
+- `smartDetectLine` appeared in live data and still carried `smartDetectTypes`
+- most returned rows were plain `motion` events, which explains a high ignored count during ingest
+
+Current implication:
+
+- the synthetic `ProtectAPI` fixtures remain useful because they preserve broader shape coverage
+- the real `ProtectAPIReal` fixtures document what the controller actually returned in one recent sample window
+
 ## Camera Fields Currently Consumed
 
 - `id`
@@ -147,8 +165,15 @@ The checked-in baseline is:
 - `Tests/Fixtures/ProtectAPI/events-response.json`
 - `Tests/Fixtures/ProtectAPI/cameras-response.json`
 - `Tests/Fixtures/ProtectAPI/schema-snapshot.json`
+- `Tests/Fixtures/ProtectAPIReal/events-response.json`
+- `Tests/Fixtures/ProtectAPIReal/cameras-response.json`
+- `Tests/Fixtures/ProtectAPIReal/schema-snapshot.json`
 
-Those fixtures are sanitized and intentionally small. They should stay representative of the event and camera shapes ingest relies on.
+`ProtectAPI` is the synthetic baseline used to preserve broad-shape coverage, including embedded camera objects and `cameraId`.
+
+`ProtectAPIReal` is a sanitized controller capture used to document the currently observed live event-list shape.
+
+Both fixture sets should stay small and representative.
 
 When the Protect API changes:
 

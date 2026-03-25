@@ -1,12 +1,12 @@
 [
   {
-    "displayName" : "Camera 001",
+    "displayName" : "North 01",
     "id" : "camera-001",
-    "name" : "Camera 001"
+    "name" : "North 01"
   },
   {
-    "displayName" : "Camera 002",
+    "displayName" : "Entry 02",
     "id" : "camera-002",
-    "name" : "Camera 002"
+    "name" : "Entry 02"
   }
 ]

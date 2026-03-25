@@ -1,0 +1,1092 @@
+[
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:05:43Z",
+    "id" : "event-001",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:05:32Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:06:21Z",
+    "id" : "event-002",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:06:08Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:06:41Z",
+    "id" : "event-003",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:06:29Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:07:11Z",
+    "id" : "event-004",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:06:47Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:07:24Z",
+    "id" : "event-005",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:07:14Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:09:58Z",
+    "id" : "event-006",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:09:35Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-001",
+    "end" : "2026-03-25T03:10:45Z",
+    "id" : "event-007",
+    "smartDetectTypes" : [
+      "person"
+    ],
+    "start" : "2026-03-25T03:10:11Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:10:43Z",
+    "id" : "event-008",
+    "smartDetectTypes" : [
+      "person"
+    ],
+    "start" : "2026-03-25T03:10:11Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:10:24Z",
+    "id" : "event-009",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:10:13Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:10:23Z",
+    "id" : "event-010",
+    "smartDetectTypes" : [
+      "person"
+    ],
+    "start" : "2026-03-25T03:10:14Z",
+    "type" : "smartDetectLine"
+  },
+  {
+    "camera" : "camera-001",
+    "end" : "2026-03-25T03:10:24Z",
+    "id" : "event-011",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:10:17Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:10:30Z",
+    "id" : "event-012",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:10:20Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-007",
+    "end" : "2026-03-25T03:10:48Z",
+    "id" : "event-013",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:10:21Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-007",
+    "end" : "2026-03-25T03:10:44Z",
+    "id" : "event-014",
+    "smartDetectTypes" : [
+      "person"
+    ],
+    "start" : "2026-03-25T03:10:25Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:10:47Z",
+    "id" : "event-015",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:10:30Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-001",
+    "end" : "2026-03-25T03:10:47Z",
+    "id" : "event-016",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:10:33Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:11:36Z",
+    "id" : "event-017",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:11:26Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:15:53Z",
+    "id" : "event-018",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:15:34Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:16:39Z",
+    "id" : "event-019",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T03:15:51Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-001",
+    "end" : "2026-03-25T03:34:33Z",
+    "id" : "event-020",
+    "smartDetectTypes" : [
+      "person"
+    ],
+    "start" : "2026-03-25T03:34:21Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-007",
+    "end" : "2026-03-25T03:34:30Z",
+    "id" : "event-021",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:34:23Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-001",
+    "end" : "2026-03-25T03:34:41Z",
+    "id" : "event-022",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:34:24Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:34:38Z",
+    "id" : "event-023",
+    "smartDetectTypes" : [
+      "person"
+    ],
+    "start" : "2026-03-25T03:34:24Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:34:39Z",
+    "id" : "event-024",
+    "smartDetectTypes" : [
+      "person"
+    ],
+    "start" : "2026-03-25T03:34:28Z",
+    "type" : "smartDetectLine"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:34:40Z",
+    "id" : "event-025",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:34:28Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:35:21Z",
+    "id" : "event-026",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:34:46Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:35:52Z",
+    "id" : "event-027",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:35:39Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:36:48Z",
+    "id" : "event-028",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:36:39Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:37:17Z",
+    "id" : "event-029",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:36:52Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:38:16Z",
+    "id" : "event-030",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:38:12Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:39:10Z",
+    "id" : "event-031",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:39:06Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:40:42Z",
+    "id" : "event-032",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:40:38Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:42:09Z",
+    "id" : "event-033",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:41:40Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:42:48Z",
+    "id" : "event-034",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:42:32Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:44:15Z",
+    "id" : "event-035",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:43:50Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:44:33Z",
+    "id" : "event-036",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:44:24Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:44:47Z",
+    "id" : "event-037",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:44:36Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:45:01Z",
+    "id" : "event-038",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:44:57Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:46:13Z",
+    "id" : "event-039",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:46:09Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:46:21Z",
+    "id" : "event-040",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:46:16Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:48:27Z",
+    "id" : "event-041",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:48:23Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:51:24Z",
+    "id" : "event-042",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:51:12Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:52:20Z",
+    "id" : "event-043",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:51:46Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T03:53:29Z",
+    "id" : "event-044",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:53:24Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:53:37Z",
+    "id" : "event-045",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T03:53:30Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:53:35Z",
+    "id" : "event-046",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:53:30Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:53:51Z",
+    "id" : "event-047",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:53:43Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:54:01Z",
+    "id" : "event-048",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T03:53:57Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:54:08Z",
+    "id" : "event-049",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:54:01Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:54:31Z",
+    "id" : "event-050",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:54:17Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:55:47Z",
+    "id" : "event-051",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:55:33Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:56:07Z",
+    "id" : "event-052",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:56:03Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:57:03Z",
+    "id" : "event-053",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:56:55Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:57:15Z",
+    "id" : "event-054",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:57:07Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:57:31Z",
+    "id" : "event-055",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:57:17Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:58:22Z",
+    "id" : "event-056",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T03:57:23Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:57:53Z",
+    "id" : "event-057",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:57:38Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-005",
+    "end" : "2026-03-25T03:57:53Z",
+    "id" : "event-058",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:57:43Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T03:58:07Z",
+    "id" : "event-059",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T03:58:00Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T03:58:09Z",
+    "id" : "event-060",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:58:05Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T03:58:48Z",
+    "id" : "event-061",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T03:58:09Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:58:21Z",
+    "id" : "event-062",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:58:12Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T03:58:31Z",
+    "id" : "event-063",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:58:14Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:58:48Z",
+    "id" : "event-064",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:58:25Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:59:03Z",
+    "id" : "event-065",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:58:49Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T03:59:12Z",
+    "id" : "event-066",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T03:58:52Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T03:59:48Z",
+    "id" : "event-067",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T03:59:15Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T04:03:35Z",
+    "id" : "event-068",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T04:02:32Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:03:59Z",
+    "id" : "event-069",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:03:49Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:08:53Z",
+    "id" : "event-070",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:08:47Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:09:45Z",
+    "id" : "event-071",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:09:32Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:10:47Z",
+    "id" : "event-072",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:10:33Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T04:10:50Z",
+    "id" : "event-073",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T04:10:37Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T04:10:53Z",
+    "id" : "event-074",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:10:44Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:12:02Z",
+    "id" : "event-075",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:10:56Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:11:09Z",
+    "id" : "event-076",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T04:10:58Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T04:11:47Z",
+    "id" : "event-077",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:11:40Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T04:11:59Z",
+    "id" : "event-078",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T04:11:42Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T04:12:01Z",
+    "id" : "event-079",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:11:57Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-008",
+    "end" : "2026-03-25T04:12:12Z",
+    "id" : "event-080",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:12:03Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:12:38Z",
+    "id" : "event-081",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:12:13Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:15:59Z",
+    "id" : "event-082",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:15:53Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:18:13Z",
+    "id" : "event-083",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:18:00Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:22:04Z",
+    "id" : "event-084",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:21:56Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:23:34Z",
+    "id" : "event-085",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:23:23Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:27:05Z",
+    "id" : "event-086",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:26:52Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:27:13Z",
+    "id" : "event-087",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:27:08Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T04:27:58Z",
+    "id" : "event-088",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:27:54Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:32:33Z",
+    "id" : "event-089",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:32:25Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:33:21Z",
+    "id" : "event-090",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:33:13Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:33:35Z",
+    "id" : "event-091",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:33:29Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:33:42Z",
+    "id" : "event-092",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:33:37Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:33:48Z",
+    "id" : "event-093",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:33:43Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:40:32Z",
+    "id" : "event-094",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:40:18Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:41:02Z",
+    "id" : "event-095",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:40:35Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:40:47Z",
+    "id" : "event-096",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T04:40:42Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:41:27Z",
+    "id" : "event-097",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:41:04Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:41:39Z",
+    "id" : "event-098",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:41:35Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-002",
+    "end" : "2026-03-25T04:41:49Z",
+    "id" : "event-099",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:41:45Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:46:42Z",
+    "id" : "event-100",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:46:34Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:48:28Z",
+    "id" : "event-101",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:48:16Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:55:18Z",
+    "id" : "event-102",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:55:02Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:55:31Z",
+    "id" : "event-103",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:55:24Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:58:32Z",
+    "id" : "event-104",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:58:17Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T05:00:14Z",
+    "id" : "event-105",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T04:58:58Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T04:59:17Z",
+    "id" : "event-106",
+    "smartDetectTypes" : [
+      "animal"
+    ],
+    "start" : "2026-03-25T04:59:11Z",
+    "type" : "smartDetectZone"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T05:00:36Z",
+    "id" : "event-107",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T05:00:27Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T05:02:27Z",
+    "id" : "event-108",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T05:02:18Z",
+    "type" : "motion"
+  },
+  {
+    "camera" : "camera-004",
+    "end" : "2026-03-25T05:02:52Z",
+    "id" : "event-109",
+    "smartDetectTypes" : [
+
+    ],
+    "start" : "2026-03-25T05:02:47Z",
+    "type" : "motion"
+  }
+]

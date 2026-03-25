@@ -1,0 +1,114 @@
+{
+  "files" : [
+    {
+      "fileName" : "events-response.json",
+      "paths" : [
+        {
+          "path" : "$",
+          "presence" : "always",
+          "types" : [
+            "array"
+          ]
+        },
+        {
+          "path" : "[]",
+          "presence" : "always",
+          "types" : [
+            "object"
+          ]
+        },
+        {
+          "path" : "[].camera",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].end",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].id",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].smartDetectTypes",
+          "presence" : "always",
+          "types" : [
+            "array"
+          ]
+        },
+        {
+          "path" : "[].smartDetectTypes[]",
+          "presence" : "sometimes",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].start",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].type",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        }
+      ],
+      "rootType" : "array"
+    },
+    {
+      "fileName" : "cameras-response.json",
+      "paths" : [
+        {
+          "path" : "$",
+          "presence" : "always",
+          "types" : [
+            "array"
+          ]
+        },
+        {
+          "path" : "[]",
+          "presence" : "always",
+          "types" : [
+            "object"
+          ]
+        },
+        {
+          "path" : "[].displayName",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].id",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        },
+        {
+          "path" : "[].name",
+          "presence" : "always",
+          "types" : [
+            "string"
+          ]
+        }
+      ],
+      "rootType" : "array"
+    }
+  ]
+}

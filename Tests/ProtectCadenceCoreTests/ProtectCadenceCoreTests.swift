@@ -92,6 +92,31 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func realControllerSnapshotDecodesCurrentObservedEventShape() throws {
+        let payloads: [ProtectEventPayload] = try decodeFixture("events-response.json", fixtureSet: "ProtectAPIReal")
+
+        #expect(!payloads.isEmpty)
+        #expect(payloads[0].eventID == nil)
+        #expect(payloads[0].id != nil)
+        #expect(payloads[0].detectedAt == nil)
+        #expect(payloads[0].cameraReferenceID == "camera-005")
+    }
+
+    @Test
+    func controllerConfigurationReadsOptInInsecureTLSFlag() throws {
+        let configuration = try ProtectControllerConfiguration.fromEnvironment(
+            [
+                "PROTECT_CONTROLLER_URL": "https://unifi.local",
+                "PROTECT_USERNAME": "user",
+                "PROTECT_PASSWORD": "pass",
+                "PROTECT_ALLOW_INSECURE_TLS": "1",
+            ]
+        )
+
+        #expect(configuration.allowInsecureTLS == true)
+    }
+
+    @Test
     func recentEventsAreReturnedNewestFirst() throws {
         let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
 
@@ -523,7 +548,7 @@ struct ProtectCadenceCoreTests {
 
         let recent = try database.fetchRecent(RecentEventsRequest(limit: 10))
         #expect(recent.map(\.kind).sorted() == ["animal", "package", "person", "vehicle"])
-        #expect(Set(recent.map(\.camera)) == ["Camera 001", "Camera 002"])
+        #expect(Set(recent.map(\.camera)) == ["Entry 02", "North 01"])
 
         #expect(FileManager.default.fileExists(atPath: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("events-response.json").path))
         #expect(FileManager.default.fileExists(atPath: URL(fileURLWithPath: snapshotDirectory).appendingPathComponent("cameras-response.json").path))
@@ -552,6 +577,22 @@ struct ProtectCadenceCoreTests {
         let eventsData = try fixtureData("events-response.json")
         let camerasData = try fixtureData("cameras-response.json")
         let expected: ProtectSchemaSnapshot = try decodeFixture("schema-snapshot.json")
+
+        let actual = try ProtectSchemaSnapshot.make(
+            files: [
+                ("events-response.json", eventsData),
+                ("cameras-response.json", camerasData),
+            ]
+        )
+
+        #expect(actual == expected)
+    }
+
+    @Test
+    func realControllerSchemaSnapshotMatchesCommittedFixtureInventory() throws {
+        let eventsData = try fixtureData("events-response.json", fixtureSet: "ProtectAPIReal")
+        let camerasData = try fixtureData("cameras-response.json", fixtureSet: "ProtectAPIReal")
+        let expected: ProtectSchemaSnapshot = try decodeFixture("schema-snapshot.json", fixtureSet: "ProtectAPIReal")
 
         let actual = try ProtectSchemaSnapshot.make(
             files: [
@@ -614,20 +655,23 @@ struct ProtectCadenceCoreTests {
         return directoryURL.path
     }
 
-    private func fixtureData(_ name: String) throws -> Data {
-        try Data(contentsOf: fixturesDirectoryURL().appendingPathComponent(name))
+    private func fixtureData(_ name: String, fixtureSet: String = "ProtectAPI") throws -> Data {
+        try Data(contentsOf: fixturesDirectoryURL(fixtureSet: fixtureSet).appendingPathComponent(name))
     }
 
-    private func decodeFixture<T: Decodable>(_ name: String) throws -> T {
+    private func decodeFixture<T: Decodable>(_ name: String, fixtureSet: String = "ProtectAPI") throws -> T {
         let decoder = JSONDecoder()
-        return try decoder.decode(T.self, from: fixtureData(name))
+        return try decoder.decode(T.self, from: fixtureData(name, fixtureSet: fixtureSet))
     }
 
-    private func fixturesDirectoryURL(filePath: StaticString = #filePath) -> URL {
+    private func fixturesDirectoryURL(
+        fixtureSet: String = "ProtectAPI",
+        filePath: StaticString = #filePath
+    ) -> URL {
         URL(fileURLWithPath: "\(filePath)")
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Fixtures/ProtectAPI", isDirectory: true)
+            .appendingPathComponent("Fixtures/\(fixtureSet)", isDirectory: true)
     }
 
     private func unsanitizedSampleCameras() -> [ProtectCameraRecord] {

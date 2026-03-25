@@ -1,14 +1,22 @@
 import Foundation
+import Security
 
 public struct ProtectControllerConfiguration: Sendable {
     public let controllerURL: URL
     public let username: String
     public let password: String
+    public let allowInsecureTLS: Bool
 
-    public init(controllerURL: URL, username: String, password: String) {
+    public init(
+        controllerURL: URL,
+        username: String,
+        password: String,
+        allowInsecureTLS: Bool = false
+    ) {
         self.controllerURL = controllerURL
         self.username = username
         self.password = password
+        self.allowInsecureTLS = allowInsecureTLS
     }
 
     public static func fromEnvironment(
@@ -26,6 +34,8 @@ public struct ProtectControllerConfiguration: Sendable {
             throw ProtectControllerConfigurationError.missingEnvironmentVariable("PROTECT_PASSWORD")
         }
 
+        let allowInsecureTLS = Self.parseBooleanEnvironmentValue(environment["PROTECT_ALLOW_INSECURE_TLS"])
+
         guard let controllerURL = URL(string: rawURL) else {
             throw ProtectControllerConfigurationError.invalidControllerURL(rawURL)
         }
@@ -33,8 +43,22 @@ public struct ProtectControllerConfiguration: Sendable {
         return ProtectControllerConfiguration(
             controllerURL: controllerURL,
             username: username,
-            password: password
+            password: password,
+            allowInsecureTLS: allowInsecureTLS
         )
+    }
+
+    private static func parseBooleanEnvironmentValue(_ value: String?) -> Bool {
+        guard let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
+            return false
+        }
+
+        switch normalized {
+        case "1", "true", "yes", "y", "on":
+            return true
+        default:
+            return false
+        }
     }
 
     var loginURL: URL {
@@ -114,8 +138,18 @@ public protocol ProtectHTTPTransport: Sendable {
 public struct URLSessionProtectHTTPTransport: ProtectHTTPTransport {
     private let session: URLSession
 
-    public init(session: URLSession = .shared) {
+    public init(session: URLSession) {
         self.session = session
+    }
+
+    public init(allowInsecureTLS: Bool = false) {
+        if allowInsecureTLS {
+            let configuration = URLSessionConfiguration.ephemeral
+            let delegate = AllowInsecureTLSURLSessionDelegate()
+            self.session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+        } else {
+            self.session = .shared
+        }
     }
 
     public func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -136,11 +170,11 @@ public actor ProtectControllerClient {
 
     public init(
         configuration: ProtectControllerConfiguration,
-        transport: ProtectHTTPTransport = URLSessionProtectHTTPTransport(),
+        transport: (any ProtectHTTPTransport)? = nil,
         decoder: JSONDecoder = JSONDecoder()
     ) {
         self.configuration = configuration
-        self.transport = transport
+        self.transport = transport ?? URLSessionProtectHTTPTransport(allowInsecureTLS: configuration.allowInsecureTLS)
         self.decoder = decoder
     }
 
@@ -241,6 +275,22 @@ public actor ProtectControllerClient {
 
     private static func unixMillisecondsString(for date: Date) -> String {
         String(Int64((date.timeIntervalSince1970 * 1000).rounded()))
+    }
+}
+
+private final class AllowInsecureTLSURLSessionDelegate: NSObject, URLSessionDelegate {
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        completionHandler(.useCredential, URLCredential(trust: trust))
     }
 }
 

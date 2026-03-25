@@ -1,0 +1,47 @@
+[
+  {
+    "displayName" : "North 01",
+    "id" : "camera-001",
+    "name" : "North 01"
+  },
+  {
+    "displayName" : "Entry 02",
+    "id" : "camera-002",
+    "name" : "Entry 02"
+  },
+  {
+    "displayName" : "South 03",
+    "id" : "camera-003",
+    "name" : "South 03"
+  },
+  {
+    "displayName" : "Garden 04",
+    "id" : "camera-004",
+    "name" : "Garden 04"
+  },
+  {
+    "displayName" : "Garage 05",
+    "id" : "camera-005",
+    "name" : "Garage 05"
+  },
+  {
+    "displayName" : "Drive 06",
+    "id" : "camera-006",
+    "name" : "Drive 06"
+  },
+  {
+    "displayName" : "Yard 07",
+    "id" : "camera-007",
+    "name" : "Yard 07"
+  },
+  {
+    "displayName" : "Walk 08",
+    "id" : "camera-008",
+    "name" : "Walk 08"
+  },
+  {
+    "displayName" : "Patio 09",
+    "id" : "camera-009",
+    "name" : "Patio 09"
+  }
+]

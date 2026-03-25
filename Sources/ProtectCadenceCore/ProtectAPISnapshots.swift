@@ -30,6 +30,21 @@ public struct ProtectAPISnapshotWriter {
 }
 
 public enum ProtectSnapshotSanitizer {
+    private static let cameraLabelPrefixes = [
+        "North",
+        "Entry",
+        "South",
+        "Garden",
+        "Garage",
+        "Drive",
+        "Yard",
+        "Walk",
+        "Patio",
+        "Gate",
+        "Deck",
+        "Rear",
+    ]
+
     public static func sanitize(events: [ProtectEventPayload], cameras: [ProtectCameraRecord]) -> [ProtectEventPayload] {
         let cameraIDMap = Dictionary(
             uniqueKeysWithValues: cameras.enumerated().map { index, camera in
@@ -38,7 +53,7 @@ public enum ProtectSnapshotSanitizer {
         )
         let cameraNameMap = Dictionary(
             uniqueKeysWithValues: cameras.enumerated().map { index, camera in
-                (camera.id, String(format: "Camera %03d", index + 1))
+                (camera.id, sanitizedCameraName(for: index + 1))
             }
         )
         let eventIDMap: [String: String] = Dictionary(
@@ -87,9 +102,14 @@ public enum ProtectSnapshotSanitizer {
         cameras.enumerated().map { index, _ in
             let ordinal = index + 1
             let id = String(format: "camera-%03d", ordinal)
-            let name = String(format: "Camera %03d", ordinal)
+            let name = sanitizedCameraName(for: ordinal)
             return ProtectCameraRecord(id: id, displayName: name, name: name)
         }
+    }
+
+    private static func sanitizedCameraName(for ordinal: Int) -> String {
+        let prefix = cameraLabelPrefixes[(ordinal - 1) % cameraLabelPrefixes.count]
+        return "\(prefix) \(String(format: "%02d", ordinal))"
     }
 }
 

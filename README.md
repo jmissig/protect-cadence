@@ -228,5 +228,8 @@ The current ingest-side Protect contract lives in:
 - `Tests/Fixtures/ProtectAPI/events-response.json`
 - `Tests/Fixtures/ProtectAPI/cameras-response.json`
 - `Tests/Fixtures/ProtectAPI/schema-snapshot.json`
+- `Tests/Fixtures/ProtectAPIReal/events-response.json`
+- `Tests/Fixtures/ProtectAPIReal/cameras-response.json`
+- `Tests/Fixtures/ProtectAPIReal/schema-snapshot.json`
 
-Those files define the fields and endpoint shapes the package currently depends on. The schema snapshot is generated from the committed sanitized fixtures and exists to make drift obvious in diffs and tests.
+`ProtectAPI` is the small synthetic baseline that exercises broader fixture shapes. `ProtectAPIReal` is a sanitized live controller capture. The schema snapshots are generated from the committed fixtures and exist to make drift obvious in diffs and tests.
