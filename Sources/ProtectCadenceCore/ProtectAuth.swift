@@ -20,24 +20,16 @@ public struct ProtectCadenceAuthConfig: Codable, Sendable, Equatable {
     }
 }
 
-public struct ProtectCadenceIngestConfig: Codable, Sendable, Equatable {
-    public let databasePath: String
-
-    public init(databasePath: String) {
-        self.databasePath = databasePath
-    }
-}
-
 public struct ProtectCadenceConfig: Codable, Sendable, Equatable {
     public let auth: ProtectCadenceAuthConfig?
-    public let ingest: ProtectCadenceIngestConfig?
+    public let databasePath: String?
 
     public init(
         auth: ProtectCadenceAuthConfig? = nil,
-        ingest: ProtectCadenceIngestConfig? = nil
+        databasePath: String? = nil
     ) {
         self.auth = auth
-        self.ingest = ingest
+        self.databasePath = databasePath
     }
 
     public init(
@@ -54,16 +46,16 @@ public struct ProtectCadenceConfig: Codable, Sendable, Equatable {
                 password: password,
                 allowInsecureTLS: allowInsecureTLS
             ),
-            ingest: databasePath.map(ProtectCadenceIngestConfig.init(databasePath:))
+            databasePath: databasePath
         )
     }
 
     public func updatingAuth(_ auth: ProtectCadenceAuthConfig?) -> ProtectCadenceConfig {
-        ProtectCadenceConfig(auth: auth, ingest: ingest)
+        ProtectCadenceConfig(auth: auth, databasePath: databasePath)
     }
 
-    public func updatingIngest(_ ingest: ProtectCadenceIngestConfig?) -> ProtectCadenceConfig {
-        ProtectCadenceConfig(auth: auth, ingest: ingest)
+    public func updatingDatabasePath(_ databasePath: String?) -> ProtectCadenceConfig {
+        ProtectCadenceConfig(auth: auth, databasePath: databasePath)
     }
 }
 

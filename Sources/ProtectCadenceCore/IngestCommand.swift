@@ -27,7 +27,6 @@ public enum IngestCLIError: Error, CustomStringConvertible {
 }
 
 public struct IngestCLI: Sendable {
-    public let databasePath: String
     public let databasePathOverride: String?
     public let eventJSONPath: String?
     public let cameraJSONPath: String?
@@ -161,7 +160,6 @@ public struct IngestCLI: Sendable {
         }
 
         self.databasePathOverride = databasePathOverride
-        self.databasePath = databasePathOverride ?? ProtectCadencePaths.makeDefault().databasePath
         self.eventJSONPath = eventJSONPath
         self.cameraJSONPath = cameraJSONPath
         self.cameraName = cameraName
@@ -227,7 +225,10 @@ public enum ProtectCadenceIngestRunner {
             )
         }
 
-        let databasePath = resolvedDatabasePath(cli: cli, config: config)
+        let databasePath = try ProtectCadenceDatabasePathResolver.resolve(
+            explicitOverride: cli.databasePathOverride,
+            configPath: cli.configPath
+        )
         let database = try ProtectCadenceDatabase(path: databasePath)
 
         let response: IngestResponse
@@ -277,7 +278,7 @@ public enum ProtectCadenceIngestRunner {
         config: ProtectCadenceConfig?
     ) -> Bool {
         let hasAuth = !storedAuthNeedsSetup(config: config)
-        let hasDatabasePath = firstNonEmpty(config?.ingest?.databasePath) != nil
+        let hasDatabasePath = firstNonEmpty(config?.databasePath) != nil
         return !hasAuth || !hasDatabasePath
     }
 
@@ -287,17 +288,6 @@ public enum ProtectCadenceIngestRunner {
         let username = firstNonEmpty(authConfig?.username)
         let password = firstNonEmpty(authConfig?.password)
         return controllerURL == nil || username == nil || password == nil
-    }
-
-    private static func resolvedDatabasePath(
-        cli: IngestCLI,
-        config: ProtectCadenceConfig?
-    ) -> String {
-        firstNonEmpty(
-            cli.databasePathOverride,
-            config?.ingest?.databasePath,
-            cli.databasePath
-        )!
     }
 
     private static func runInteractiveFirstRunFlow(
@@ -326,14 +316,12 @@ public enum ProtectCadenceIngestRunner {
         }
 
         let databasePath: String
-        if let existingDatabasePath = firstNonEmpty(workingConfig.ingest?.databasePath) {
+        if let existingDatabasePath = firstNonEmpty(workingConfig.databasePath) {
             databasePath = existingDatabasePath
         } else {
             statusOutput("Choosing a local database path...")
             databasePath = try resolvedDatabasePathForSetup(prompter: prompter)
-            workingConfig = workingConfig.updatingIngest(
-                ProtectCadenceIngestConfig(databasePath: databasePath)
-            )
+            workingConfig = workingConfig.updatingDatabasePath(databasePath)
             try ProtectCadenceConfigStore.save(workingConfig, to: cli.configPath, fileManager: fileManager)
         }
 

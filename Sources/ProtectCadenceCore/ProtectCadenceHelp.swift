@@ -87,7 +87,8 @@ public enum ProtectCadenceHelp {
     Usage: protect-cadence query recent [options]
 
     Options:
-      --db <path>                SQLite path
+      --db <path>                SQLite path override
+      --config <path>            Override config file path
       --limit <n>                Row limit, default 50
       --last-hours <n>           Optional recent window
     """
@@ -96,7 +97,8 @@ public enum ProtectCadenceHelp {
     Usage: protect-cadence query summary [options]
 
     Options:
-      --db <path>                SQLite path
+      --db <path>                SQLite path override
+      --config <path>            Override config file path
       --last-hours <n>           Summary window, default 24
     """
 }

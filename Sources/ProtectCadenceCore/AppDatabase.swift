@@ -52,6 +52,29 @@ public struct ProtectCadencePaths: Sendable {
     }
 }
 
+public enum ProtectCadenceDatabasePathResolver {
+    public static func resolve(
+        explicitOverride: String?,
+        configPath: String = ProtectCadencePaths.defaultConfigPath()
+    ) throws -> String {
+        let config = try ProtectCadenceConfigStore.load(from: configPath)
+        return firstNonEmpty(
+            explicitOverride,
+            config?.databasePath,
+            ProtectCadencePaths.makeDefault().databasePath
+        )!
+    }
+
+    private static func firstNonEmpty(_ values: String?...) -> String? {
+        values.first { value in
+            guard let value else {
+                return false
+            }
+            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        } ?? nil
+    }
+}
+
 public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord, Sendable {
     public static let databaseTableName = "events"
 

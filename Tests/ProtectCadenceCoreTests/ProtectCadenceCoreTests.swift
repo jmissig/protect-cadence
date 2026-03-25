@@ -139,6 +139,56 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func databasePathResolverPrefersExplicitOverrideThenConfigThenDefault() throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        let configuredPath = temporaryDirectoryPath() + "/configured.sqlite"
+        try ProtectCadenceConfigStore.save(
+            ProtectCadenceConfig(databasePath: configuredPath),
+            to: configPath
+        )
+
+        let fromConfig = try ProtectCadenceDatabasePathResolver.resolve(
+            explicitOverride: nil,
+            configPath: configPath
+        )
+        let fromOverride = try ProtectCadenceDatabasePathResolver.resolve(
+            explicitOverride: "/tmp/override.sqlite",
+            configPath: configPath
+        )
+        let fromDefault = try ProtectCadenceDatabasePathResolver.resolve(
+            explicitOverride: nil,
+            configPath: temporaryDirectoryPath() + "/missing-config.json"
+        )
+
+        #expect(fromConfig == configuredPath)
+        #expect(fromOverride == "/tmp/override.sqlite")
+        #expect(fromDefault == ProtectCadencePaths.makeDefault().databasePath)
+    }
+
+    @Test
+    func configIgnoresLegacyNestedIngestDatabasePath() throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        try """
+        {
+          "auth": {
+            "controllerURL": "https://protect.example",
+            "username": "legacy-user",
+            "password": "legacy-pass",
+            "allowInsecureTLS": false
+          },
+          "ingest": {
+            "databasePath": "/tmp/legacy.sqlite"
+          }
+        }
+        """.data(using: .utf8)!.write(to: URL(fileURLWithPath: configPath))
+
+        let config = try ProtectCadenceConfigStore.load(from: configPath)
+
+        #expect(config?.auth?.controllerURL == "https://protect.example")
+        #expect(config?.databasePath == nil)
+    }
+
+    @Test
     func authResolverUsesConfigPasswordWhenEnvIsAbsent() throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
         try ProtectCadenceConfigStore.save(
@@ -256,7 +306,7 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
-    func authLoginPersistsNestedConfigShape() throws {
+    func authLoginPersistsAuthOnlyConfigShapeWhenNoDatabasePathIsSet() throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
 
         _ = try ProtectCadenceAuthRunner.run(
@@ -277,6 +327,7 @@ struct ProtectCadenceCoreTests {
         #expect(json.contains("\"auth\""))
         #expect(json.contains("\"controllerURL\""))
         #expect(!json.contains("\"databasePath\""))
+        #expect(!json.contains("\"ingest\""))
     }
 
     @Test
@@ -897,7 +948,7 @@ struct ProtectCadenceCoreTests {
                 password: "onboard-pass",
                 allowInsecureTLS: false
             ),
-            ingest: ProtectCadenceIngestConfig(databasePath: managedDatabasePath)
+            databasePath: managedDatabasePath
         ))
         #expect(output.lines.contains("First-run setup for protect-cadence."))
         #expect(output.lines.contains("Saved config. Next time, run something like: `protect-cadence ingest --last-hours 6`"))
@@ -980,7 +1031,7 @@ struct ProtectCadenceCoreTests {
                     password: "ready-pass",
                     allowInsecureTLS: false
                 ),
-                ingest: ProtectCadenceIngestConfig(databasePath: temporaryDatabasePath())
+                databasePath: temporaryDatabasePath()
             ),
             to: configPath
         )
@@ -1006,6 +1057,56 @@ struct ProtectCadenceCoreTests {
             Issue.record("expected --last-hours validation error")
         } catch let error as QueryCLIError {
             #expect(error.description.contains("--last-hours"))
+        }
+    }
+
+    @Test
+    func queryCLIParsesConfigPathAndDatabaseOverride() throws {
+        let cli = try QueryCLI(arguments: [
+            "recent",
+            "--config", "/tmp/custom-config.json",
+            "--db", "/tmp/custom.sqlite",
+            "--limit", "5",
+        ])
+
+        #expect(cli.configPath == "/tmp/custom-config.json")
+        #expect(cli.databasePathOverride == "/tmp/custom.sqlite")
+        #expect(cli.limit == 5)
+    }
+
+    @Test
+    func queryRunnerUsesConfiguredDatabasePath() throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: Date(timeIntervalSince1970: 200),
+                    camera: "Backyard",
+                    kind: "animal",
+                    eventID: "event-2"
+                ),
+            ],
+            into: database
+        )
+
+        try ProtectCadenceConfigStore.save(
+            ProtectCadenceConfig(databasePath: databasePath),
+            to: configPath
+        )
+
+        let output = try ProtectCadenceQueryRunner.run(
+            arguments: ["recent", "--config", configPath, "--limit", "1"]
+        )
+
+        switch output {
+        case let .recent(response):
+            #expect(response.databasePath == databasePath)
+            #expect(response.events.map(\.eventID) == ["event-2"])
+        case .summary:
+            Issue.record("expected recent output")
         }
     }
 

@@ -32,14 +32,16 @@ public enum QueryCLIError: Error, CustomStringConvertible {
 }
 
 public struct QueryCLI: Sendable {
-    public let databasePath: String
+    public let databasePathOverride: String?
+    public let configPath: String
     public let limit: Int
     public let lastHours: Int?
     public let subcommand: QuerySubcommand
 
     public init(arguments: [String]) throws {
         var remaining = arguments
-        var databasePath = ProtectCadencePaths.makeDefault().databasePath
+        var databasePathOverride: String?
+        var configPath = ProtectCadencePaths.defaultConfigPath()
         var limit = 50
         var lastHours: Int?
 
@@ -69,7 +71,11 @@ public struct QueryCLI: Sendable {
         }
 
         if remaining.contains("--db") {
-            databasePath = try popValue(for: "--db")
+            databasePathOverride = try popValue(for: "--db")
+        }
+
+        if remaining.contains("--config") {
+            configPath = try popValue(for: "--config")
         }
 
         if let parsedLimit = try popInteger(for: "--limit") {
@@ -93,7 +99,8 @@ public struct QueryCLI: Sendable {
             throw QueryCLIError.unknownSubcommand(rawSubcommand)
         }
 
-        self.databasePath = databasePath
+        self.databasePathOverride = databasePathOverride
+        self.configPath = configPath
         self.limit = limit
         self.lastHours = lastHours
         self.subcommand = subcommand
@@ -141,7 +148,11 @@ public enum ProtectCadenceQueryRunner {
     }
 
     public static func run(cli: QueryCLI, now: Date = Date()) throws -> QueryCommandOutput {
-        let database = try ProtectCadenceDatabase(path: cli.databasePath)
+        let databasePath = try ProtectCadenceDatabasePathResolver.resolve(
+            explicitOverride: cli.databasePathOverride,
+            configPath: cli.configPath
+        )
+        let database = try ProtectCadenceDatabase(path: databasePath)
 
         switch cli.subcommand {
         case .recent:
