@@ -116,3 +116,5 @@ protect-cadence ingest --help
 protect-cadence query --help
 protect-cadence auth --help
 ```
+
+Made with Codex and OpenClaw.
