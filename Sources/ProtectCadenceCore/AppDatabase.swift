@@ -2,8 +2,9 @@ import Foundation
 import GRDB
 
 public enum ProtectCadenceCommand: String, Sendable {
-    case ingest = "protect-cadence-ingest"
-    case query = "protect-cadence-query"
+    case ingest = "protect-cadence ingest"
+    case query = "protect-cadence query"
+    case auth = "protect-cadence auth"
 }
 
 public struct ProtectCadencePaths: Sendable {

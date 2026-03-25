@@ -14,12 +14,8 @@ let package = Package(
             targets: ["ProtectCadenceCore"]
         ),
         .executable(
-            name: "protect-cadence-ingest",
-            targets: ["protect-cadence-ingest"]
-        ),
-        .executable(
-            name: "protect-cadence-query",
-            targets: ["protect-cadence-query"]
+            name: "protect-cadence",
+            targets: ["protect-cadence"]
         ),
     ],
     dependencies: [
@@ -33,11 +29,7 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "protect-cadence-ingest",
-            dependencies: ["ProtectCadenceCore"]
-        ),
-        .executableTarget(
-            name: "protect-cadence-query",
+            name: "protect-cadence",
             dependencies: ["ProtectCadenceCore"]
         ),
         .testTarget(

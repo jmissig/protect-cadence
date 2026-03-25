@@ -46,9 +46,9 @@ You can override that with `--db /path/to/protect-cadence.sqlite`.
 
 ## Current Commands
 
-### `protect-cadence-ingest`
+### `protect-cadence ingest`
 
-This command now has three modes:
+This is the primary ingest entrypoint and has three modes:
 
 - with no arguments, it initializes the database and returns a JSON status object
 - with `--last-hours <n>`, it logs into Protect, fetches a bounded event window, normalizes settled events, and inserts deduplicated rows
@@ -61,13 +61,13 @@ export PROTECT_CONTROLLER_URL="https://protect.local"
 export PROTECT_USERNAME="local-user"
 export PROTECT_PASSWORD="local-password"
 
-swift run protect-cadence-ingest --last-hours 6
+swift run protect-cadence ingest --last-hours 6
 ```
 
 Replay example with event and camera snapshots:
 
 ```bash
-swift run protect-cadence-ingest \
+swift run protect-cadence ingest \
   --event-json ./Tests/Fixtures/ProtectAPI/events-response.json \
   --camera-json ./Tests/Fixtures/ProtectAPI/cameras-response.json
 ```
@@ -75,7 +75,7 @@ swift run protect-cadence-ingest \
 Snapshot capture example:
 
 ```bash
-swift run protect-cadence-ingest \
+swift run protect-cadence ingest \
   --last-hours 6 \
   --write-api-snapshot-dir ./tmp/protect-api-snapshot
 ```
@@ -88,16 +88,16 @@ Notes:
 - live ingest counts ignored unsettled events and unsupported payloads in the JSON response
 - output is JSON, intended for local tools and agents
 
-### `protect-cadence-query recent`
+### `protect-cadence query recent`
 
 Returns the newest normalized rows first.
 
 Examples:
 
 ```bash
-swift run protect-cadence-query recent
-swift run protect-cadence-query recent --limit 10
-swift run protect-cadence-query recent --limit 10 --last-hours 24
+swift run protect-cadence query recent
+swift run protect-cadence query recent --limit 10
+swift run protect-cadence query recent --limit 10 --last-hours 24
 ```
 
 Behavior:
@@ -106,16 +106,25 @@ Behavior:
 - `--last-hours` is optional for `recent`
 - when `--last-hours` is provided, the response includes the effective query window
 
-### `protect-cadence-query summary`
+### `protect-cadence query summary`
 
 Returns grouped counts by camera and kind for a time window.
 
 Examples:
 
 ```bash
-swift run protect-cadence-query summary
-swift run protect-cadence-query summary --last-hours 24
-swift run protect-cadence-query summary --db ./data/protect-cadence.sqlite --last-hours 168
+swift run protect-cadence query summary
+swift run protect-cadence query summary --last-hours 24
+swift run protect-cadence query summary --db ./data/protect-cadence.sqlite --last-hours 168
+```
+
+### `protect-cadence auth`
+
+This is intentionally only a stub right now. It exists so the single-command surface is in place before auth grows into per-user config and Keychain-backed setup.
+
+```bash
+swift run protect-cadence auth
+swift run protect-cadence auth status
 ```
 
 Behavior:
@@ -151,32 +160,32 @@ That fixture normalizes into two rows: one `person` row and one `vehicle` row.
 1. Initialize a database:
 
 ```bash
-swift run protect-cadence-ingest
+swift run protect-cadence ingest
 ```
 
 2. Ingest one or more local event fixtures:
 
 ```bash
-swift run protect-cadence-ingest --event-json ./fixtures/event-1.json
-swift run protect-cadence-ingest --event-json ./fixtures/event-2.json
+swift run protect-cadence ingest --event-json ./fixtures/event-1.json
+swift run protect-cadence ingest --event-json ./fixtures/event-2.json
 ```
 
 3. Inspect the latest rows:
 
 ```bash
-swift run protect-cadence-query recent --limit 20
+swift run protect-cadence query recent --limit 20
 ```
 
 4. Ask for a compact summary:
 
 ```bash
-swift run protect-cadence-query summary --last-hours 24
+swift run protect-cadence query summary --last-hours 24
 ```
 
 5. Optionally capture sanitized API snapshots for regression tests:
 
 ```bash
-swift run protect-cadence-ingest \
+swift run protect-cadence ingest \
   --last-hours 1 \
   --write-api-snapshot-dir ./Tests/Fixtures/ProtectAPI
 ```
@@ -210,6 +219,10 @@ All current commands default to JSON output.
 - `totalRows`
 - `distinctEventCount`
 - `groups`
+
+## Compatibility Shims
+
+`protect-cadence-ingest` and `protect-cadence-query` still exist as small compatibility wrappers, but the documented path is now the unified `protect-cadence` executable.
 
 ## Current Limits
 

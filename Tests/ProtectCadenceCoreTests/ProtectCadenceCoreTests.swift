@@ -356,7 +356,7 @@ struct ProtectCadenceCoreTests {
 
         switch output {
         case let .summary(response):
-            #expect(response.command == "protect-cadence-query")
+            #expect(response.command == "protect-cadence query")
             #expect(response.totalRows == 1)
             #expect(response.distinctEventCount == 1)
             #expect(response.groups == [SummaryGroup(camera: "Porch", kind: "package", rowCount: 1)])
@@ -367,6 +367,80 @@ struct ProtectCadenceCoreTests {
             #expect(json.contains("\"distinctEventCount\""))
         case .recent:
             Issue.record("expected summary output")
+        }
+    }
+
+    @Test
+    func unifiedRunnerRoutesQuerySummaryThroughSingleCommandSurface() async throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: now.addingTimeInterval(-15 * 60),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "event-1"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try await ProtectCadenceCLIRunner.run(
+            arguments: ["query", "summary", "--db", databasePath, "--last-hours", "1"],
+            now: now
+        )
+
+        switch output {
+        case let .query(queryOutput):
+            switch queryOutput {
+            case let .summary(response):
+                #expect(response.command == "protect-cadence query")
+                #expect(response.totalRows == 1)
+                #expect(response.distinctEventCount == 1)
+            case .recent:
+                Issue.record("expected summary output")
+            }
+        case .ingest, .auth:
+            Issue.record("expected query output")
+        }
+    }
+
+    @Test
+    func unifiedRunnerRoutesFixtureIngestThroughSingleCommandSurface() async throws {
+        let databasePath = temporaryDatabasePath()
+        let output = try await ProtectCadenceCLIRunner.run(
+            arguments: [
+                "ingest",
+                "--db", databasePath,
+                "--event-json", fixturePath("events-response.json"),
+                "--camera-json", fixturePath("cameras-response.json"),
+            ]
+        )
+
+        switch output {
+        case let .ingest(response):
+            #expect(response.command == "protect-cadence ingest")
+            #expect(response.fetchedEventCount == 5)
+            #expect(response.normalizedRowCount == 5)
+            #expect(response.insertedRowCount == 5)
+        case .query, .auth:
+            Issue.record("expected ingest output")
+        }
+    }
+
+    @Test
+    func unifiedRunnerReturnsAuthStubResponse() async throws {
+        let output = try await ProtectCadenceCLIRunner.run(arguments: ["auth"])
+
+        switch output {
+        case let .auth(response):
+            #expect(response.command == "protect-cadence auth")
+            #expect(response.status == "stub")
+        case .ingest, .query:
+            Issue.record("expected auth output")
         }
     }
 
@@ -662,6 +736,10 @@ struct ProtectCadenceCoreTests {
 
     private func fixtureData(_ name: String, fixtureSet: String = "ProtectAPI") throws -> Data {
         try Data(contentsOf: fixturesDirectoryURL(fixtureSet: fixtureSet).appendingPathComponent(name))
+    }
+
+    private func fixturePath(_ name: String, fixtureSet: String = "ProtectAPI") -> String {
+        fixturesDirectoryURL(fixtureSet: fixtureSet).appendingPathComponent(name).path
     }
 
     private func decodeFixture<T: Decodable>(_ name: String, fixtureSet: String = "ProtectAPI") throws -> T {

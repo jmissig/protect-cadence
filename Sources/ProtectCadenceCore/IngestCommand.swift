@@ -1,14 +1,13 @@
 import Foundation
-import ProtectCadenceCore
 
-enum IngestCLIError: Error, CustomStringConvertible {
+public enum IngestCLIError: Error, CustomStringConvertible {
     case missingValue(String)
     case invalidInteger(flag: String, value: String)
     case invalidPositiveInteger(flag: String, value: String)
     case conflictingModes
     case unexpectedArgument(String)
 
-    var description: String {
+    public var description: String {
         switch self {
         case let .missingValue(flag):
             return "missing value for \(flag)"
@@ -24,15 +23,15 @@ enum IngestCLIError: Error, CustomStringConvertible {
     }
 }
 
-struct IngestCLI {
-    let databasePath: String
-    let eventJSONPath: String?
-    let cameraJSONPath: String?
-    let cameraName: String?
-    let lastHours: Int?
-    let snapshotDirectoryPath: String?
+public struct IngestCLI: Sendable {
+    public let databasePath: String
+    public let eventJSONPath: String?
+    public let cameraJSONPath: String?
+    public let cameraName: String?
+    public let lastHours: Int?
+    public let snapshotDirectoryPath: String?
 
-    init(arguments: [String]) throws {
+    public init(arguments: [String]) throws {
         var remaining = arguments
         var databasePath = ProtectCadencePaths.makeDefault().databasePath
         var eventJSONPath: String?
@@ -93,23 +92,19 @@ struct IngestCLI {
             snapshotDirectoryPath = try popValue(for: "--write-api-snapshot-dir")
         }
 
-        if let eventJSONPath, lastHours != nil {
-            _ = eventJSONPath
+        if eventJSONPath != nil, lastHours != nil {
             throw IngestCLIError.conflictingModes
         }
 
-        if let cameraJSONPath, eventJSONPath == nil {
-            _ = cameraJSONPath
+        if cameraJSONPath != nil, eventJSONPath == nil {
             throw IngestCLIError.unexpectedArgument("--camera-json")
         }
 
-        if let cameraName, eventJSONPath == nil {
-            _ = cameraName
+        if cameraName != nil, eventJSONPath == nil {
             throw IngestCLIError.unexpectedArgument("--camera-name")
         }
 
-        if let snapshotDirectoryPath, lastHours == nil {
-            _ = snapshotDirectoryPath
+        if snapshotDirectoryPath != nil, lastHours == nil {
             throw IngestCLIError.unexpectedArgument("--write-api-snapshot-dir")
         }
 
@@ -125,7 +120,7 @@ struct IngestCLI {
         self.snapshotDirectoryPath = snapshotDirectoryPath
     }
 
-    func queryWindow(now: Date = Date()) -> QueryWindow? {
+    public func queryWindow(now: Date = Date()) -> QueryWindow? {
         guard let lastHours else {
             return nil
         }
@@ -135,47 +130,45 @@ struct IngestCLI {
     }
 }
 
-@main
-enum ProtectCadenceIngestCommand {
-    static func main() async {
-        do {
-            let cli = try IngestCLI(arguments: Array(CommandLine.arguments.dropFirst()))
-            let database = try ProtectCadenceDatabase(path: cli.databasePath)
+public enum ProtectCadenceIngestRunner {
+    public static func run(
+        arguments: [String],
+        now: Date = Date(),
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) async throws -> IngestResponse {
+        let cli = try IngestCLI(arguments: arguments)
+        let database = try ProtectCadenceDatabase(path: cli.databasePath)
 
-            let response: IngestResponse
-            let service: ProtectIngestService
+        let response: IngestResponse
+        let service: ProtectIngestService
 
-            if let window = cli.queryWindow() {
-                let configuration = try ProtectControllerConfiguration.fromEnvironment()
-                let client = ProtectControllerClient(configuration: configuration)
-                service = ProtectIngestService(database: database, client: client)
-                let snapshotDirectory = cli.snapshotDirectoryPath.map(URL.init(fileURLWithPath:))
-                response = try await service.ingestControllerEvents(
-                    window: window,
-                    snapshotDirectory: snapshotDirectory
+        if let window = cli.queryWindow(now: now) {
+            let configuration = try ProtectControllerConfiguration.fromEnvironment(environment)
+            let client = ProtectControllerClient(configuration: configuration)
+            service = ProtectIngestService(database: database, client: client)
+            let snapshotDirectory = cli.snapshotDirectoryPath.map(URL.init(fileURLWithPath:))
+            response = try await service.ingestControllerEvents(
+                window: window,
+                snapshotDirectory: snapshotDirectory
+            )
+        } else {
+            service = ProtectIngestService(database: database)
+
+            if let eventJSONPath = cli.eventJSONPath {
+                let data = try Data(contentsOf: URL(fileURLWithPath: eventJSONPath))
+                let cameraData = try cli.cameraJSONPath.map {
+                    try Data(contentsOf: URL(fileURLWithPath: $0))
+                }
+                response = try service.ingestFixtureEvents(
+                    from: data,
+                    cameraLookupData: cameraData,
+                    fallbackCameraName: cli.cameraName
                 )
             } else {
-                service = ProtectIngestService(database: database)
-
-                if let eventJSONPath = cli.eventJSONPath {
-                    let data = try Data(contentsOf: URL(fileURLWithPath: eventJSONPath))
-                    let cameraData = try cli.cameraJSONPath.map {
-                        try Data(contentsOf: URL(fileURLWithPath: $0))
-                    }
-                    response = try service.ingestFixtureEvents(
-                        from: data,
-                        cameraLookupData: cameraData,
-                        fallbackCameraName: cli.cameraName
-                    )
-                } else {
-                    response = service.readyResponse()
-                }
+                response = service.readyResponse()
             }
-
-            print(try JSONOutput.encode(response))
-        } catch {
-            fputs("error: \(error)\n", stderr)
-            exit(1)
         }
+
+        return response
     }
 }
