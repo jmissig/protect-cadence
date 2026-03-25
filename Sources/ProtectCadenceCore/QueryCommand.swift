@@ -1,8 +1,74 @@
 import Foundation
 
 public enum QuerySubcommand: String, Sendable {
-    case recent
+    case events
     case summary
+}
+
+public enum EventOrder: String, Codable, Sendable {
+    case newest
+    case oldest
+}
+
+public enum SummaryGroupBy: String, Codable, Sendable, CaseIterable {
+    case camera
+    case kind
+    case date
+    case hour
+    case weekday
+}
+
+public struct QueryTimeOfDayRange: Codable, Sendable, Equatable {
+    public let startHour: Int
+    public let startMinute: Int
+    public let endHour: Int
+    public let endMinute: Int
+
+    public init(startHour: Int, startMinute: Int, endHour: Int, endMinute: Int) {
+        self.startHour = startHour
+        self.startMinute = startMinute
+        self.endHour = endHour
+        self.endMinute = endMinute
+    }
+
+    public var startMinutes: Int {
+        (startHour * 60) + startMinute
+    }
+
+    public var endMinutes: Int {
+        (endHour * 60) + endMinute
+    }
+
+    public var overnight: Bool {
+        startMinutes > endMinutes
+    }
+
+    public var rawValue: String {
+        "\(Self.format(startHour, startMinute))-\(Self.format(endHour, endMinute))"
+    }
+
+    private static func format(_ hour: Int, _ minute: Int) -> String {
+        String(format: "%02d:%02d", hour, minute)
+    }
+}
+
+public struct QueryFilters: Codable, Sendable, Equatable {
+    public let window: QueryWindow?
+    public let cameras: [String]
+    public let kinds: [String]
+    public let timeOfDay: QueryTimeOfDayRange?
+
+    public init(
+        window: QueryWindow? = nil,
+        cameras: [String] = [],
+        kinds: [String] = [],
+        timeOfDay: QueryTimeOfDayRange? = nil
+    ) {
+        self.window = window
+        self.cameras = cameras
+        self.kinds = kinds
+        self.timeOfDay = timeOfDay
+    }
 }
 
 public enum QueryCLIError: Error, CustomStringConvertible {
@@ -12,11 +78,18 @@ public enum QueryCLIError: Error, CustomStringConvertible {
     case missingValue(String)
     case invalidInteger(flag: String, value: String)
     case invalidPositiveInteger(flag: String, value: String)
+    case invalidISO8601(flag: String, value: String)
+    case invalidTimeOfDay(String)
+    case invalidOrder(String)
+    case invalidGroupBy(String)
+    case conflictingWindowFlags
+    case incompleteExplicitWindow
+    case invalidWindowRange(start: Date, end: Date)
 
     public var description: String {
         switch self {
         case .missingSubcommand:
-            return "expected a subcommand such as 'recent' or 'summary'"
+            return "expected a subcommand such as 'events' or 'summary'"
         case let .unknownSubcommand(command):
             return "unknown subcommand '\(command)'"
         case let .unexpectedArgument(argument):
@@ -27,16 +100,52 @@ public enum QueryCLIError: Error, CustomStringConvertible {
             return "invalid integer '\(value)' for \(flag)"
         case let .invalidPositiveInteger(flag, value):
             return "\(flag) must be greater than zero, got '\(value)'"
+        case let .invalidISO8601(flag, value):
+            return "invalid ISO8601 value '\(value)' for \(flag)"
+        case let .invalidTimeOfDay(value):
+            return "invalid time-of-day range '\(value)', expected HH:MM-HH:MM"
+        case let .invalidOrder(value):
+            return "invalid value '\(value)' for --order, expected newest or oldest"
+        case let .invalidGroupBy(value):
+            return "invalid value '\(value)' for --group-by"
+        case .conflictingWindowFlags:
+            return "use either --last-hours or --start/--end, not both"
+        case .incompleteExplicitWindow:
+            return "--start and --end must be provided together"
+        case let .invalidWindowRange(start, end):
+            return "--start must be earlier than --end, got \(QueryDateParser.encode(start)) to \(QueryDateParser.encode(end))"
         }
+    }
+}
+
+enum QueryDateParser {
+    private static func makeInternetDateTimeFormatter(fractionalSeconds: Bool) -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = fractionalSeconds
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
+        return formatter
+    }
+
+    static func parse(_ value: String) -> Date? {
+        makeInternetDateTimeFormatter(fractionalSeconds: true).date(from: value)
+            ?? makeInternetDateTimeFormatter(fractionalSeconds: false).date(from: value)
+    }
+
+    static func encode(_ date: Date) -> String {
+        makeInternetDateTimeFormatter(fractionalSeconds: false).string(from: date)
     }
 }
 
 public struct QueryCLI: Sendable {
     public let databasePathOverride: String?
     public let configPath: String
-    public let limit: Int
-    public let lastHours: Int?
     public let subcommand: QuerySubcommand
+    public let filters: QueryFilters
+    public let lastHours: Int?
+    public let limit: Int
+    public let order: EventOrder
+    public let groupBy: [SummaryGroupBy]
 
     public init(arguments: [String]) throws {
         var remaining = arguments
@@ -44,97 +153,213 @@ public struct QueryCLI: Sendable {
         var configPath = ProtectCadencePaths.defaultConfigPath()
         var limit = 50
         var lastHours: Int?
-
-        func popValue(for flag: String) throws -> String {
-            guard let index = remaining.firstIndex(of: flag) else {
-                throw QueryCLIError.missingValue(flag)
-            }
-            guard remaining.indices.contains(index + 1) else {
-                throw QueryCLIError.missingValue(flag)
-            }
-
-            let value = remaining[index + 1]
-            remaining.removeSubrange(index...(index + 1))
-            return value
-        }
-
-        func popInteger(for flag: String) throws -> Int? {
-            guard remaining.contains(flag) else {
-                return nil
-            }
-
-            let rawValue = try popValue(for: flag)
-            guard let parsed = Int(rawValue) else {
-                throw QueryCLIError.invalidInteger(flag: flag, value: rawValue)
-            }
-            return parsed
-        }
-
-        if remaining.contains("--db") {
-            databasePathOverride = try popValue(for: "--db")
-        }
-
-        if remaining.contains("--config") {
-            configPath = try popValue(for: "--config")
-        }
-
-        if let parsedLimit = try popInteger(for: "--limit") {
-            limit = parsedLimit
-        }
-
-        if let parsedLastHours = try popInteger(for: "--last-hours") {
-            guard parsedLastHours > 0 else {
-                throw QueryCLIError.invalidPositiveInteger(flag: "--last-hours", value: String(parsedLastHours))
-            }
-            lastHours = parsedLastHours
-        }
+        var explicitStart: Date?
+        var explicitEnd: Date?
+        var cameras: [String] = []
+        var kinds: [String] = []
+        var timeOfDay: QueryTimeOfDayRange?
+        var order: EventOrder = .newest
+        var groupBy: [SummaryGroupBy] = []
 
         guard let rawSubcommand = remaining.first else {
             throw QueryCLIError.missingSubcommand
         }
-        guard remaining.count == 1 else {
-            throw QueryCLIError.unexpectedArgument(remaining[1])
-        }
         guard let subcommand = QuerySubcommand(rawValue: rawSubcommand) else {
             throw QueryCLIError.unknownSubcommand(rawSubcommand)
+        }
+        remaining.removeFirst()
+
+        func popValue(index: inout Int, flag: String) throws -> String {
+            let valueIndex = index + 1
+            guard remaining.indices.contains(valueIndex) else {
+                throw QueryCLIError.missingValue(flag)
+            }
+            index += 2
+            return remaining[valueIndex]
+        }
+
+        func parsePositiveInteger(_ rawValue: String, flag: String) throws -> Int {
+            guard let parsed = Int(rawValue) else {
+                throw QueryCLIError.invalidInteger(flag: flag, value: rawValue)
+            }
+            guard parsed > 0 else {
+                throw QueryCLIError.invalidPositiveInteger(flag: flag, value: rawValue)
+            }
+            return parsed
+        }
+
+        var index = 0
+        while index < remaining.count {
+            let argument = remaining[index]
+
+            switch argument {
+            case "--db":
+                databasePathOverride = try popValue(index: &index, flag: argument)
+            case "--config":
+                configPath = try popValue(index: &index, flag: argument)
+            case "--limit":
+                limit = try parsePositiveInteger(try popValue(index: &index, flag: argument), flag: argument)
+            case "--last-hours":
+                lastHours = try parsePositiveInteger(try popValue(index: &index, flag: argument), flag: argument)
+            case "--start":
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = QueryDateParser.parse(rawValue) else {
+                    throw QueryCLIError.invalidISO8601(flag: argument, value: rawValue)
+                }
+                explicitStart = parsed
+            case "--end":
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = QueryDateParser.parse(rawValue) else {
+                    throw QueryCLIError.invalidISO8601(flag: argument, value: rawValue)
+                }
+                explicitEnd = parsed
+            case "--camera":
+                cameras.append(try popValue(index: &index, flag: argument))
+            case "--kind":
+                kinds.append(try popValue(index: &index, flag: argument))
+            case "--time-of-day":
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = Self.parseTimeOfDayRange(rawValue) else {
+                    throw QueryCLIError.invalidTimeOfDay(rawValue)
+                }
+                timeOfDay = parsed
+            case "--order":
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = EventOrder(rawValue: rawValue) else {
+                    throw QueryCLIError.invalidOrder(rawValue)
+                }
+                order = parsed
+            case "--group-by":
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = SummaryGroupBy(rawValue: rawValue) else {
+                    throw QueryCLIError.invalidGroupBy(rawValue)
+                }
+                groupBy.append(parsed)
+            default:
+                throw QueryCLIError.unexpectedArgument(argument)
+            }
+        }
+
+        if lastHours != nil, explicitStart != nil || explicitEnd != nil {
+            throw QueryCLIError.conflictingWindowFlags
+        }
+
+        if (explicitStart == nil) != (explicitEnd == nil) {
+            throw QueryCLIError.incompleteExplicitWindow
+        }
+
+        let window: QueryWindow?
+        if let explicitStart, let explicitEnd {
+            guard explicitStart < explicitEnd else {
+                throw QueryCLIError.invalidWindowRange(start: explicitStart, end: explicitEnd)
+            }
+            window = QueryWindow(start: explicitStart, end: explicitEnd)
+        } else {
+            window = nil
         }
 
         self.databasePathOverride = databasePathOverride
         self.configPath = configPath
-        self.limit = limit
-        self.lastHours = lastHours
         self.subcommand = subcommand
+        self.filters = QueryFilters(
+            window: window,
+            cameras: cameras,
+            kinds: kinds,
+            timeOfDay: timeOfDay
+        )
+        self.lastHours = lastHours
+        self.limit = limit
+        self.order = order
+        self.groupBy = groupBy
     }
 
-    public func recentRequest(now: Date = Date()) -> RecentEventsRequest {
-        RecentEventsRequest(limit: limit, window: queryWindow(now: now))
+    public func eventsRequest(now: Date = Date()) -> EventsRequest {
+        EventsRequest(limit: limit, order: order, filters: resolvedFilters(now: now))
     }
 
     public func summaryRequest(now: Date = Date()) -> SummaryRequest {
-        SummaryRequest(window: requiredQueryWindow(now: now, defaultLastHours: 24))
+        SummaryRequest(
+            filters: resolvedFilters(now: now, defaultLastHours: 24),
+            groupBy: groupBy.isEmpty ? [.camera, .kind] : groupBy
+        )
     }
 
-    private func queryWindow(now: Date, defaultLastHours: Int? = nil) -> QueryWindow? {
-        guard let hours = lastHours ?? defaultLastHours else {
+    private func resolvedFilters(now: Date, defaultLastHours: Int? = nil) -> QueryFilters {
+        if let window = filters.window {
+            return QueryFilters(
+                window: window,
+                cameras: filters.cameras,
+                kinds: filters.kinds,
+                timeOfDay: filters.timeOfDay
+            )
+        }
+
+        if let lastHours {
+            return QueryFilters(
+                window: QueryWindow(
+                    start: now.addingTimeInterval(-Double(lastHours) * 60 * 60),
+                    end: now
+                ),
+                cameras: filters.cameras,
+                kinds: filters.kinds,
+                timeOfDay: filters.timeOfDay
+            )
+        }
+
+        guard let defaultLastHours else {
+            return filters
+        }
+
+        return QueryFilters(
+            window: QueryWindow(
+                start: now.addingTimeInterval(-Double(defaultLastHours) * 60 * 60),
+                end: now
+            ),
+            cameras: filters.cameras,
+            kinds: filters.kinds,
+            timeOfDay: filters.timeOfDay
+        )
+    }
+
+    private static func parseTimeOfDayRange(_ rawValue: String) -> QueryTimeOfDayRange? {
+        let parts = rawValue.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let start = parseClock(String(parts[0])),
+              let end = parseClock(String(parts[1]))
+        else {
             return nil
         }
 
-        let start = now.addingTimeInterval(-Double(hours) * 60 * 60)
-        return QueryWindow(start: start, end: now)
+        return QueryTimeOfDayRange(
+            startHour: start.hour,
+            startMinute: start.minute,
+            endHour: end.hour,
+            endMinute: end.minute
+        )
     }
 
-    private func requiredQueryWindow(now: Date, defaultLastHours: Int) -> QueryWindow {
-        queryWindow(now: now, defaultLastHours: defaultLastHours)!
+    private static func parseClock(_ rawValue: String) -> (hour: Int, minute: Int)? {
+        let parts = rawValue.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let hour = Int(parts[0]),
+              let minute = Int(parts[1]),
+              (0...23).contains(hour),
+              (0...59).contains(minute)
+        else {
+            return nil
+        }
+
+        return (hour, minute)
     }
 }
 
 public enum QueryCommandOutput: Encodable, Sendable {
-    case recent(RecentEventsResponse)
+    case events(EventsResponse)
     case summary(SummaryResponse)
 
     public func encode(to encoder: Encoder) throws {
         switch self {
-        case let .recent(response):
+        case let .events(response):
             try response.encode(to: encoder)
         case let .summary(response):
             try response.encode(to: encoder)
@@ -155,8 +380,8 @@ public enum ProtectCadenceQueryRunner {
         let database = try ProtectCadenceDatabase(path: databasePath)
 
         switch cli.subcommand {
-        case .recent:
-            return .recent(try database.fetchRecentResponse(cli.recentRequest(now: now)))
+        case .events:
+            return .events(try database.fetchEventsResponse(cli.eventsRequest(now: now)))
         case .summary:
             return .summary(try database.fetchSummary(cli.summaryRequest(now: now)))
         }

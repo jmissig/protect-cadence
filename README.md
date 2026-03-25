@@ -5,7 +5,7 @@
 It is built around two normal tasks:
 
 - ingest recent Protect events into SQLite
-- query recent rows or a short grouped summary
+- query event rows or a short grouped summary
 
 ## Install
 
@@ -76,17 +76,20 @@ The `query` command only needs the `databasePath` to function.
 Most people will use these:
 
 ```bash
-protect-cadence query recent
-protect-cadence query recent --limit 10
-protect-cadence query recent --last-hours 24
+protect-cadence query events
+protect-cadence query events --limit 10
+protect-cadence query events --last-hours 24
+protect-cadence query events --camera Driveway --kind person
+protect-cadence query events --time-of-day 22:00-06:00
 
 protect-cadence query summary
 protect-cadence query summary --last-hours 24
+protect-cadence query summary --group-by date --group-by kind
 ```
 
 Notes:
 
-- `query recent` defaults to `--limit 50`
+- `query events` defaults to `--limit 50`
 - `query summary` defaults to the last `24` hours
 - output is JSON
 
@@ -96,7 +99,7 @@ You can override the saved paths when needed:
 
 ```bash
 protect-cadence ingest --config /path/to/config.json
-protect-cadence query recent --db /path/to/protect-cadence.sqlite
+protect-cadence query events --db /path/to/protect-cadence.sqlite
 ```
 
 Live ingest auth can also be overridden with flags or environment variables:

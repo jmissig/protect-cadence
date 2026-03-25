@@ -11,10 +11,10 @@ public enum ProtectCadenceHelp {
             return ingest
         case ["auth", "--help"], ["help", "auth"]:
             return auth
-        case ["query", "--help"], ["help", "query"]:
+        case ["query"], ["query", "--help"], ["help", "query"]:
             return query
-        case ["query", "recent", "--help"], ["help", "query", "recent"]:
-            return queryRecent
+        case ["query", "events", "--help"], ["help", "query", "events"]:
+            return queryEvents
         case ["query", "summary", "--help"], ["help", "query", "summary"]:
             return querySummary
         default:
@@ -76,21 +76,28 @@ public enum ProtectCadenceHelp {
     """
 
     private static let query = """
-    Usage: protect-cadence query <recent|summary> [options]
+    Usage: protect-cadence query <events|summary> [options]
 
     Try:
-      protect-cadence query recent --help
+      protect-cadence query events --help
       protect-cadence query summary --help
     """
 
-    private static let queryRecent = """
-    Usage: protect-cadence query recent [options]
+    private static let queryEvents = """
+    Usage: protect-cadence query events [options]
 
     Options:
       --db <path>                SQLite path override
       --config <path>            Override config file path
+      --start <iso8601>          Inclusive window start
+      --end <iso8601>            Exclusive window end
+      --last-hours <n>           Recent window ending now
+      --camera <name>            Repeatable display-name filter
+      --kind <kind>              Repeatable kind filter
+      --time-of-day <HH:MM-HH:MM>
+                                Local time-of-day filter, supports overnight ranges
       --limit <n>                Row limit, default 50
-      --last-hours <n>           Optional recent window
+      --order <newest|oldest>    Row order, default newest
     """
 
     private static let querySummary = """
@@ -99,6 +106,14 @@ public enum ProtectCadenceHelp {
     Options:
       --db <path>                SQLite path override
       --config <path>            Override config file path
-      --last-hours <n>           Summary window, default 24
+      --start <iso8601>          Inclusive window start
+      --end <iso8601>            Exclusive window end
+      --last-hours <n>           Summary window ending now, default 24
+      --camera <name>            Repeatable display-name filter
+      --kind <kind>              Repeatable kind filter
+      --time-of-day <HH:MM-HH:MM>
+                                Local time-of-day filter, supports overnight ranges
+      --group-by <camera|kind|date|hour|weekday>
+                                Repeatable grouping, default camera + kind
     """
 }

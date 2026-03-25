@@ -579,6 +579,78 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func eventsRequestFiltersByCameraKindTimeOfDayAndOrder() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+        let calendar = Calendar(identifier: .gregorian)
+
+        func localDate(hour: Int, minute: Int, day: Int) -> Date {
+            let components = DateComponents(
+                timeZone: TimeZone(identifier: "America/Los_Angeles"),
+                year: 2026,
+                month: 3,
+                day: day,
+                hour: hour,
+                minute: minute
+            )
+            return calendar.date(from: components)!
+        }
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(hour: 23, minute: 30, day: 24),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "match-older"
+                ),
+                EventRow(
+                    timeStart: localDate(hour: 1, minute: 15, day: 25),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "match-newer"
+                ),
+                EventRow(
+                    timeStart: localDate(hour: 12, minute: 0, day: 25),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "wrong-time"
+                ),
+                EventRow(
+                    timeStart: localDate(hour: 23, minute: 45, day: 24),
+                    camera: "Backyard",
+                    kind: "person",
+                    eventID: "wrong-camera"
+                ),
+                EventRow(
+                    timeStart: localDate(hour: 0, minute: 30, day: 25),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "wrong-kind"
+                ),
+            ],
+            into: database
+        )
+
+        let rows = try database.fetchEvents(
+            EventsRequest(
+                limit: 10,
+                order: .oldest,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(hour: 20, minute: 0, day: 24),
+                        end: localDate(hour: 3, minute: 0, day: 25)
+                    ),
+                    cameras: ["Driveway"],
+                    kinds: ["person"],
+                    timeOfDay: QueryTimeOfDayRange(startHour: 22, startMinute: 0, endHour: 2, endMinute: 0)
+                )
+            )
+        )
+
+        #expect(rows.map(\.eventID) == ["match-older", "match-newer"])
+    }
+
+    @Test
     func summaryGroupsRowsByCameraAndKind() throws {
         let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
 
@@ -614,9 +686,11 @@ struct ProtectCadenceCoreTests {
 
         let summary = try database.fetchSummary(
             SummaryRequest(
-                window: QueryWindow(
-                    start: Date(timeIntervalSince1970: 90),
-                    end: Date(timeIntervalSince1970: 130)
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: Date(timeIntervalSince1970: 90),
+                        end: Date(timeIntervalSince1970: 130)
+                    )
                 )
             )
         )
@@ -625,9 +699,9 @@ struct ProtectCadenceCoreTests {
         #expect(summary.distinctEventCount == 3)
         #expect(
             summary.groups == [
-                SummaryGroup(camera: "Backyard", kind: "animal", rowCount: 1),
-                SummaryGroup(camera: "Driveway", kind: "person", rowCount: 2),
-                SummaryGroup(camera: "Driveway", kind: "vehicle", rowCount: 1),
+                SummaryGroup(group: ["camera": "Backyard", "kind": "animal"], rowCount: 1),
+                SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 2),
+                SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], rowCount: 1),
             ]
         )
     }
@@ -662,16 +736,18 @@ struct ProtectCadenceCoreTests {
 
         let summary = try database.fetchSummary(
             SummaryRequest(
-                window: QueryWindow(
-                    start: Date(timeIntervalSince1970: 100),
-                    end: Date(timeIntervalSince1970: 200)
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: Date(timeIntervalSince1970: 100),
+                        end: Date(timeIntervalSince1970: 200)
+                    )
                 )
             )
         )
 
         #expect(summary.totalRows == 1)
         #expect(summary.distinctEventCount == 1)
-        #expect(summary.groups == [SummaryGroup(camera: "Driveway", kind: "person", rowCount: 1)])
+        #expect(summary.groups == [SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 1)])
     }
 
     @Test
@@ -704,9 +780,11 @@ struct ProtectCadenceCoreTests {
 
         let summary = try database.fetchSummary(
             SummaryRequest(
-                window: QueryWindow(
-                    start: Date(timeIntervalSince1970: 90),
-                    end: Date(timeIntervalSince1970: 110)
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: Date(timeIntervalSince1970: 90),
+                        end: Date(timeIntervalSince1970: 110)
+                    )
                 )
             )
         )
@@ -721,9 +799,11 @@ struct ProtectCadenceCoreTests {
 
         let summary = try database.fetchSummary(
             SummaryRequest(
-                window: QueryWindow(
-                    start: Date(timeIntervalSince1970: 100),
-                    end: Date(timeIntervalSince1970: 200)
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: Date(timeIntervalSince1970: 100),
+                        end: Date(timeIntervalSince1970: 200)
+                    )
                 )
             )
         )
@@ -731,6 +811,51 @@ struct ProtectCadenceCoreTests {
         #expect(summary.totalRows == 0)
         #expect(summary.distinctEventCount == 0)
         #expect(summary.groups.isEmpty)
+    }
+
+    @Test
+    func summaryCanGroupByDateAndHour() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+        let calendar = Calendar(identifier: .gregorian)
+
+        func localDate(day: Int, hour: Int, minute: Int) -> Date {
+            let components = DateComponents(
+                timeZone: TimeZone(identifier: "America/Los_Angeles"),
+                year: 2026,
+                month: 3,
+                day: day,
+                hour: hour,
+                minute: minute
+            )
+            return calendar.date(from: components)!
+        }
+
+        try insertRows(
+            [
+                EventRow(timeStart: localDate(day: 24, hour: 23, minute: 10), camera: "Driveway", kind: "person", eventID: "event-1"),
+                EventRow(timeStart: localDate(day: 24, hour: 23, minute: 40), camera: "Driveway", kind: "vehicle", eventID: "event-2"),
+                EventRow(timeStart: localDate(day: 25, hour: 0, minute: 5), camera: "Driveway", kind: "person", eventID: "event-3"),
+            ],
+            into: database
+        )
+
+        let summary = try database.fetchSummary(
+            SummaryRequest(
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 24, hour: 22, minute: 0),
+                        end: localDate(day: 25, hour: 1, minute: 0)
+                    )
+                ),
+                groupBy: [.date, .hour]
+            )
+        )
+
+        #expect(summary.groupBy == [.date, .hour])
+        #expect(summary.groups == [
+            SummaryGroup(group: ["date": "2026-03-24", "hour": "23:00"], rowCount: 2),
+            SummaryGroup(group: ["date": "2026-03-25", "hour": "00:00"], rowCount: 1),
+        ])
     }
 
     @Test
@@ -761,13 +886,15 @@ struct ProtectCadenceCoreTests {
             #expect(response.command == "protect-cadence query")
             #expect(response.totalRows == 1)
             #expect(response.distinctEventCount == 1)
-            #expect(response.groups == [SummaryGroup(camera: "Porch", kind: "package", rowCount: 1)])
+            #expect(response.countSemantics == .rows)
+            #expect(response.groups == [SummaryGroup(group: ["camera": "Porch", "kind": "package"], rowCount: 1)])
+            #expect(response.filters.window == QueryWindow(start: now.addingTimeInterval(-2 * 60 * 60), end: now))
 
             let json = try JSONOutput.encode(output)
             #expect(json.contains("\"command\""))
-            #expect(json.contains("\"window\""))
+            #expect(json.contains("\"filters\""))
             #expect(json.contains("\"distinctEventCount\""))
-        case .recent:
+        case .events:
             Issue.record("expected summary output")
         }
     }
@@ -802,7 +929,7 @@ struct ProtectCadenceCoreTests {
                 #expect(response.command == "protect-cadence query")
                 #expect(response.totalRows == 1)
                 #expect(response.distinctEventCount == 1)
-            case .recent:
+            case .events:
                 Issue.record("expected summary output")
             }
         case .ingest, .auth:
@@ -1051,6 +1178,13 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func bareQueryReturnsQueryHelpText() {
+        let help = ProtectCadenceHelp.text(for: ["query"])
+
+        #expect(help?.contains("Usage: protect-cadence query <events|summary> [options]") == true)
+    }
+
+    @Test
     func queryCLIRejectsInvalidLastHours() throws {
         do {
             _ = try QueryCLI(arguments: ["summary", "--last-hours", "0"])
@@ -1063,7 +1197,7 @@ struct ProtectCadenceCoreTests {
     @Test
     func queryCLIParsesConfigPathAndDatabaseOverride() throws {
         let cli = try QueryCLI(arguments: [
-            "recent",
+            "events",
             "--config", "/tmp/custom-config.json",
             "--db", "/tmp/custom.sqlite",
             "--limit", "5",
@@ -1072,6 +1206,59 @@ struct ProtectCadenceCoreTests {
         #expect(cli.configPath == "/tmp/custom-config.json")
         #expect(cli.databasePathOverride == "/tmp/custom.sqlite")
         #expect(cli.limit == 5)
+    }
+
+    @Test
+    func queryCLIParsesSharedFiltersForEventsAndSummary() throws {
+        let start = "2026-03-25T01:00:00Z"
+        let end = "2026-03-25T05:00:00Z"
+        let eventsCLI = try QueryCLI(arguments: [
+            "events",
+            "--start", start,
+            "--end", end,
+            "--camera", "Driveway",
+            "--camera", "Backyard",
+            "--kind", "person",
+            "--kind", "vehicle",
+            "--time-of-day", "22:15-06:45",
+            "--order", "oldest",
+            "--limit", "25",
+        ])
+        let summaryCLI = try QueryCLI(arguments: [
+            "summary",
+            "--start", start,
+            "--end", end,
+            "--camera", "Driveway",
+            "--kind", "person",
+            "--time-of-day", "22:15-06:45",
+            "--group-by", "date",
+            "--group-by", "kind",
+        ])
+
+        #expect(eventsCLI.filters.window == QueryWindow(
+            start: QueryDateParser.parse(start)!,
+            end: QueryDateParser.parse(end)!
+        ))
+        #expect(eventsCLI.filters.cameras == ["Driveway", "Backyard"])
+        #expect(eventsCLI.filters.kinds == ["person", "vehicle"])
+        #expect(eventsCLI.filters.timeOfDay == QueryTimeOfDayRange(startHour: 22, startMinute: 15, endHour: 6, endMinute: 45))
+        #expect(eventsCLI.order == .oldest)
+        #expect(eventsCLI.limit == 25)
+
+        #expect(summaryCLI.filters.cameras == ["Driveway"])
+        #expect(summaryCLI.filters.kinds == ["person"])
+        #expect(summaryCLI.filters.timeOfDay == QueryTimeOfDayRange(startHour: 22, startMinute: 15, endHour: 6, endMinute: 45))
+        #expect(summaryCLI.groupBy == [.date, .kind])
+    }
+
+    @Test
+    func queryCLIRejectsConflictingWindowFlags() throws {
+        do {
+            _ = try QueryCLI(arguments: ["events", "--last-hours", "2", "--start", "2026-03-25T01:00:00Z", "--end", "2026-03-25T02:00:00Z"])
+            Issue.record("expected conflicting window flags error")
+        } catch let error as QueryCLIError {
+            #expect(error.description.contains("either --last-hours or --start/--end"))
+        }
     }
 
     @Test
@@ -1098,15 +1285,16 @@ struct ProtectCadenceCoreTests {
         )
 
         let output = try ProtectCadenceQueryRunner.run(
-            arguments: ["recent", "--config", configPath, "--limit", "1"]
+            arguments: ["events", "--config", configPath, "--limit", "1"]
         )
 
         switch output {
-        case let .recent(response):
+        case let .events(response):
             #expect(response.databasePath == databasePath)
             #expect(response.events.map(\.eventID) == ["event-2"])
+            #expect(response.countSemantics == .rows)
         case .summary:
-            Issue.record("expected recent output")
+            Issue.record("expected events output")
         }
     }
 
@@ -1134,14 +1322,14 @@ struct ProtectCadenceCoreTests {
         )
 
         let output = try ProtectCadenceQueryRunner.run(
-            arguments: ["recent", "--db", databasePath, "--limit", "1"]
+            arguments: ["events", "--db", databasePath, "--limit", "1"]
         )
 
         switch output {
-        case let .recent(response):
+        case let .events(response):
             #expect(response.events.map(\.eventID) == ["event-2"])
         case .summary:
-            Issue.record("expected recent output")
+            Issue.record("expected events output")
         }
     }
 
@@ -1170,16 +1358,16 @@ struct ProtectCadenceCoreTests {
         )
 
         let output = try ProtectCadenceQueryRunner.run(
-            arguments: ["recent", "--db", databasePath, "--last-hours", "24"],
+            arguments: ["events", "--db", databasePath, "--last-hours", "24"],
             now: now
         )
 
         switch output {
-        case let .recent(response):
-            #expect(response.window == QueryWindow(start: now.addingTimeInterval(-24 * 60 * 60), end: now))
+        case let .events(response):
+            #expect(response.filters.window == QueryWindow(start: now.addingTimeInterval(-24 * 60 * 60), end: now))
             #expect(response.events.map(\.eventID) == ["recent-event"])
         case .summary:
-            Issue.record("expected recent output")
+            Issue.record("expected events output")
         }
     }
 
@@ -1200,12 +1388,13 @@ struct ProtectCadenceCoreTests {
         )
 
         let output = try ProtectCadenceQueryRunner.run(
-            arguments: ["recent", "--db", databasePath, "--limit", "1"]
+            arguments: ["events", "--db", databasePath, "--limit", "1"]
         )
         let json = try JSONOutput.encode(output)
 
         #expect(json.contains("\"cameraID\""))
         #expect(json.contains("\"camera-json\""))
+        #expect(json.contains("\"countSemantics\""))
         #expect(json.contains("\"eventType\""))
         #expect(json.contains("\"smartDetectLine\""))
     }

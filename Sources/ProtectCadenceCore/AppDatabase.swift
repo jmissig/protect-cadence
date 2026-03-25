@@ -162,27 +162,47 @@ public struct QueryWindow: Codable, Sendable, Equatable {
     }
 }
 
-public struct RecentEventsRequest: Sendable {
-    public let limit: Int
-    public let window: QueryWindow?
+public enum CountSemantics: String, Codable, Sendable {
+    case rows
+}
 
-    public init(limit: Int = 50, window: QueryWindow? = nil) {
+public struct EventsRequest: Sendable {
+    public let limit: Int
+    public let order: EventOrder
+    public let filters: QueryFilters
+
+    public init(limit: Int = 50, order: EventOrder = .newest, filters: QueryFilters = QueryFilters()) {
         self.limit = max(1, limit)
-        self.window = window
+        self.order = order
+        self.filters = filters
     }
 }
 
-public struct RecentEventsResponse: Codable, Sendable {
+public typealias RecentEventsRequest = EventsRequest
+
+public struct EventsResponse: Codable, Sendable {
+    public let command: String
     public let databasePath: String
-    public let window: QueryWindow?
+    public let filters: QueryFilters
+    public let countSemantics: CountSemantics
     public let events: [EventRow]
 
-    public init(databasePath: String, window: QueryWindow? = nil, events: [EventRow]) {
+    public init(
+        command: String,
+        databasePath: String,
+        filters: QueryFilters,
+        countSemantics: CountSemantics = .rows,
+        events: [EventRow]
+    ) {
+        self.command = command
         self.databasePath = databasePath
-        self.window = window
+        self.filters = filters
+        self.countSemantics = countSemantics
         self.events = events
     }
 }
+
+public typealias RecentEventsResponse = EventsResponse
 
 public struct IngestResponse: Codable, Sendable {
     public let command: String
@@ -216,59 +236,89 @@ public struct IngestResponse: Codable, Sendable {
 }
 
 public struct SummaryRequest: Sendable {
-    public let window: QueryWindow
+    public let filters: QueryFilters
+    public let groupBy: [SummaryGroupBy]
 
-    public init(window: QueryWindow) {
-        self.window = window
+    public init(filters: QueryFilters, groupBy: [SummaryGroupBy] = [.camera, .kind]) {
+        self.filters = filters
+        self.groupBy = groupBy
     }
 }
 
-public struct SummaryGroup: Codable, FetchableRecord, Sendable, Equatable {
-    public let camera: String
-    public let kind: String
+public struct SummaryGroup: Codable, Sendable, Equatable {
+    public let group: [String: String]
     public let rowCount: Int
 
-    public init(camera: String, kind: String, rowCount: Int) {
-        self.camera = camera
-        self.kind = kind
+    public init(group: [String: String], rowCount: Int) {
+        self.group = group
         self.rowCount = rowCount
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case camera
-        case kind
-        case rowCount
-    }
-
-    public init(row: Row) {
-        camera = row["camera"]
-        kind = row["kind"]
-        rowCount = row["row_count"]
     }
 }
 
 public struct SummaryResponse: Codable, Sendable {
     public let command: String
     public let databasePath: String
-    public let window: QueryWindow
+    public let filters: QueryFilters
+    public let countSemantics: CountSemantics
     public let totalRows: Int
     public let distinctEventCount: Int
+    public let groupBy: [SummaryGroupBy]
     public let groups: [SummaryGroup]
 
     public init(
         command: String,
         databasePath: String,
-        window: QueryWindow,
+        filters: QueryFilters,
+        countSemantics: CountSemantics = .rows,
         totalRows: Int,
         distinctEventCount: Int,
+        groupBy: [SummaryGroupBy],
         groups: [SummaryGroup]
     ) {
         self.command = command
         self.databasePath = databasePath
-        self.window = window
+        self.filters = filters
+        self.countSemantics = countSemantics
         self.totalRows = totalRows
         self.distinctEventCount = distinctEventCount
+        self.groupBy = groupBy
         self.groups = groups
+    }
+}
+
+private struct EventWhereClause {
+    let sql: String
+    let arguments: StatementArguments
+}
+
+private extension SummaryGroupBy {
+    var alias: String {
+        "group_\(rawValue)"
+    }
+
+    var selectSQL: String {
+        switch self {
+        case .camera:
+            return "camera"
+        case .kind:
+            return "kind"
+        case .date:
+            return "strftime('%Y-%m-%d', time_start, 'localtime')"
+        case .hour:
+            return "strftime('%H:00', time_start, 'localtime')"
+        case .weekday:
+            return """
+                CASE strftime('%w', time_start, 'localtime')
+                WHEN '0' THEN 'sun'
+                WHEN '1' THEN 'mon'
+                WHEN '2' THEN 'tue'
+                WHEN '3' THEN 'wed'
+                WHEN '4' THEN 'thu'
+                WHEN '5' THEN 'fri'
+                ELSE 'sat'
+                END
+                """
+        }
     }
 }
 
@@ -307,40 +357,63 @@ public final class ProtectCadenceDatabase {
         }
     }
 
-    public func fetchRecent(_ request: RecentEventsRequest = RecentEventsRequest()) throws -> [EventRow] {
+    public func fetchEvents(_ request: EventsRequest = EventsRequest()) throws -> [EventRow] {
         try dbQueue.read { db in
-            var query = EventRow
-                .order(EventRow.Columns.timeStart.desc, EventRow.Columns.id.desc)
-            
-            if let window = request.window {
-                query = query.filter(
-                    sql: "\(EventRow.Columns.timeStart.name) >= ? AND \(EventRow.Columns.timeStart.name) < ?",
-                    arguments: [window.start, window.end]
-                )
+            let whereClause = try eventWhereClause(for: request.filters)
+            let orderClause: String
+            switch request.order {
+            case .newest:
+                orderClause = "time_start DESC, id DESC"
+            case .oldest:
+                orderClause = "time_start ASC, id ASC"
             }
 
-            return try query
-                .limit(request.limit)
-                .fetchAll(db)
+            var arguments = whereClause.arguments
+            arguments += [request.limit]
+
+            return try EventRow.fetchAll(
+                db,
+                sql: """
+                    SELECT *
+                    FROM \(EventRow.databaseTableName)
+                    \(whereClause.sql)
+                    ORDER BY \(orderClause)
+                    LIMIT ?
+                    """,
+                arguments: arguments
+            )
         }
     }
 
-    public func fetchRecentResponse(_ request: RecentEventsRequest = RecentEventsRequest()) throws -> RecentEventsResponse {
-        RecentEventsResponse(databasePath: path, window: request.window, events: try fetchRecent(request))
+    public func fetchEventsResponse(_ request: EventsRequest = EventsRequest()) throws -> EventsResponse {
+        EventsResponse(
+            command: ProtectCadenceCommand.query.rawValue,
+            databasePath: path,
+            filters: request.filters,
+            events: try fetchEvents(request)
+        )
+    }
+
+    public func fetchRecent(_ request: EventsRequest = EventsRequest()) throws -> [EventRow] {
+        try fetchEvents(request)
+    }
+
+    public func fetchRecentResponse(_ request: EventsRequest = EventsRequest()) throws -> EventsResponse {
+        try fetchEventsResponse(request)
     }
 
     public func fetchSummary(_ request: SummaryRequest) throws -> SummaryResponse {
         try dbQueue.read { db in
-            let arguments: StatementArguments = [request.window.start, request.window.end]
+            let whereClause = try eventWhereClause(for: request.filters)
 
             let totalRows = try Int.fetchOne(
                 db,
                 sql: """
                     SELECT COUNT(*)
                     FROM \(EventRow.databaseTableName)
-                    WHERE time_start >= ? AND time_start < ?
+                    \(whereClause.sql)
                     """,
-                arguments: arguments
+                arguments: whereClause.arguments
             ) ?? 0
 
             let distinctEventCount = try Int.fetchOne(
@@ -348,33 +421,89 @@ public final class ProtectCadenceDatabase {
                 sql: """
                     SELECT COUNT(DISTINCT event_id)
                     FROM \(EventRow.databaseTableName)
-                    WHERE time_start >= ? AND time_start < ?
+                    \(whereClause.sql)
                     """,
-                arguments: arguments
+                arguments: whereClause.arguments
             ) ?? 0
 
-            let groups = try SummaryGroup.fetchAll(
-                db,
-                sql: """
-                    SELECT camera, kind, COUNT(*) AS row_count
-                    FROM \(EventRow.databaseTableName)
-                    WHERE time_start >= ? AND time_start < ?
-                    GROUP BY camera, kind
-                    ORDER BY camera ASC, kind ASC
-                    """,
-                arguments: arguments
-            )
+            let groups = try fetchSummaryGroups(db: db, request: request, whereClause: whereClause)
 
             return SummaryResponse(
                 command: ProtectCadenceCommand.query.rawValue,
                 databasePath: path,
-                window: request.window,
+                filters: request.filters,
                 totalRows: totalRows,
                 distinctEventCount: distinctEventCount,
+                groupBy: request.groupBy,
                 groups: groups
             )
         }
     }
+
+    private func fetchSummaryGroups(
+        db: Database,
+        request: SummaryRequest,
+        whereClause: EventWhereClause
+    ) throws -> [SummaryGroup] {
+        let selectColumns = request.groupBy.map { "\($0.selectSQL) AS \($0.alias)" }.joined(separator: ", ")
+        let groupColumns = request.groupBy.map(\.alias).joined(separator: ", ")
+        let sql = """
+            SELECT \(selectColumns), COUNT(*) AS row_count
+            FROM \(EventRow.databaseTableName)
+            \(whereClause.sql)
+            GROUP BY \(groupColumns)
+            ORDER BY \(groupColumns)
+            """
+
+        return try Row.fetchAll(db, sql: sql, arguments: whereClause.arguments).map { row in
+            var values: [String: String] = [:]
+            for dimension in request.groupBy {
+                values[dimension.rawValue] = row[dimension.alias]
+            }
+            return SummaryGroup(group: values, rowCount: row["row_count"])
+        }
+    }
+
+    private func eventWhereClause(for filters: QueryFilters) throws -> EventWhereClause {
+        var clauses: [String] = []
+        var arguments = StatementArguments()
+
+        if let window = filters.window {
+            clauses.append("time_start >= ? AND time_start < ?")
+            arguments += [window.start, window.end]
+        }
+
+        if !filters.cameras.isEmpty {
+            clauses.append("camera IN (\(Self.bindVariables(count: filters.cameras.count)))")
+            for camera in filters.cameras {
+                arguments += [camera]
+            }
+        }
+
+        if !filters.kinds.isEmpty {
+            clauses.append("kind IN (\(Self.bindVariables(count: filters.kinds.count)))")
+            for kind in filters.kinds {
+                arguments += [kind]
+            }
+        }
+
+        if let timeOfDay = filters.timeOfDay {
+            let comparator = timeOfDay.overnight ? "OR" : "AND"
+            clauses.append("(\(Self.timeOfDayMinutesSQL) >= ? \(comparator) \(Self.timeOfDayMinutesSQL) < ?)")
+            arguments += [timeOfDay.startMinutes, timeOfDay.endMinutes]
+        }
+
+        let sql = clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ")
+        return EventWhereClause(sql: sql, arguments: arguments)
+    }
+
+    private static func bindVariables(count: Int) -> String {
+        Array(repeating: "?", count: count).joined(separator: ", ")
+    }
+
+    private static let timeOfDayMinutesSQL = """
+        ((CAST(strftime('%H', time_start, 'localtime') AS INTEGER) * 60) + CAST(strftime('%M', time_start, 'localtime') AS INTEGER))
+        """
 
     private static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
