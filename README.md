@@ -79,11 +79,14 @@ Most people will use these:
 protect-cadence query events
 protect-cadence query events --limit 10
 protect-cadence query events --last-hours 24
+protect-cadence query events --since 2026-03-25T00:00:00Z
+protect-cadence query events --since 2026-03-25T00:00:00Z --until 2026-03-26T00:00:00Z
 protect-cadence query events --camera Driveway --kind person
 protect-cadence query events --time-of-day 22:00-06:00
 
 protect-cadence query summary
 protect-cadence query summary --last-hours 24
+protect-cadence query summary --since 2026-03-25T00:00:00Z --until 2026-03-26T00:00:00Z --group-by date
 protect-cadence query summary --group-by date --group-by kind
 ```
 
@@ -91,6 +94,9 @@ Notes:
 
 - `query events` defaults to `--limit 50`
 - `query summary` defaults to the last `24` hours
+- `--since` and `--until` are the public explicit bounds
+- `--since` alone resolves to a window ending at `now`
+- `--until` requires `--since`
 - output is JSON
 
 ## Overrides

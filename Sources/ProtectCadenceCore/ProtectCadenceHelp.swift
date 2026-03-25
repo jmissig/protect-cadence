@@ -89,8 +89,8 @@ public enum ProtectCadenceHelp {
     Options:
       --db <path>                SQLite path override
       --config <path>            Override config file path
-      --start <iso8601>          Inclusive window start
-      --end <iso8601>            Exclusive window end
+      --since <iso8601>          Inclusive lower bound, missing upper side resolves to now
+      --until <iso8601>          Exclusive upper bound, requires --since
       --last-hours <n>           Recent window ending now
       --camera <name>            Repeatable display-name filter
       --kind <kind>              Repeatable kind filter
@@ -106,8 +106,8 @@ public enum ProtectCadenceHelp {
     Options:
       --db <path>                SQLite path override
       --config <path>            Override config file path
-      --start <iso8601>          Inclusive window start
-      --end <iso8601>            Exclusive window end
+      --since <iso8601>          Inclusive lower bound, missing upper side resolves to now
+      --until <iso8601>          Exclusive upper bound, requires --since
       --last-hours <n>           Summary window ending now, default 24
       --camera <name>            Repeatable display-name filter
       --kind <kind>              Repeatable kind filter

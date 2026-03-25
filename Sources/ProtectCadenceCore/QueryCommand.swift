@@ -71,6 +71,31 @@ public struct QueryFilters: Codable, Sendable, Equatable {
     }
 }
 
+public struct QueryWindowBounds: Sendable, Equatable {
+    public let since: Date?
+    public let until: Date?
+
+    public init(since: Date? = nil, until: Date? = nil) {
+        self.since = since
+        self.until = until
+    }
+
+    public var isEmpty: Bool {
+        since == nil && until == nil
+    }
+
+    public func resolve(now: Date) throws -> QueryWindow {
+        let start = since ?? now
+        let end = until ?? now
+
+        guard start < end else {
+            throw QueryCLIError.invalidWindowRange(start: start, end: end)
+        }
+
+        return QueryWindow(start: start, end: end)
+    }
+}
+
 public enum QueryCLIError: Error, CustomStringConvertible {
     case missingSubcommand
     case unknownSubcommand(String)
@@ -83,7 +108,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
     case invalidOrder(String)
     case invalidGroupBy(String)
     case conflictingWindowFlags
-    case incompleteExplicitWindow
+    case untilRequiresSince
     case invalidWindowRange(start: Date, end: Date)
 
     public var description: String {
@@ -109,11 +134,11 @@ public enum QueryCLIError: Error, CustomStringConvertible {
         case let .invalidGroupBy(value):
             return "invalid value '\(value)' for --group-by"
         case .conflictingWindowFlags:
-            return "use either --last-hours or --start/--end, not both"
-        case .incompleteExplicitWindow:
-            return "--start and --end must be provided together"
+            return "use either --last-hours or --since/--until, not both"
+        case .untilRequiresSince:
+            return "--until requires --since"
         case let .invalidWindowRange(start, end):
-            return "--start must be earlier than --end, got \(QueryDateParser.encode(start)) to \(QueryDateParser.encode(end))"
+            return "resolved time window must have start earlier than end, got \(QueryDateParser.encode(start)) to \(QueryDateParser.encode(end))"
         }
     }
 }
@@ -142,6 +167,7 @@ public struct QueryCLI: Sendable {
     public let configPath: String
     public let subcommand: QuerySubcommand
     public let filters: QueryFilters
+    public let windowBounds: QueryWindowBounds?
     public let lastHours: Int?
     public let limit: Int
     public let order: EventOrder
@@ -153,8 +179,8 @@ public struct QueryCLI: Sendable {
         var configPath = ProtectCadencePaths.defaultConfigPath()
         var limit = 50
         var lastHours: Int?
-        var explicitStart: Date?
-        var explicitEnd: Date?
+        var explicitSince: Date?
+        var explicitUntil: Date?
         var cameras: [String] = []
         var kinds: [String] = []
         var timeOfDay: QueryTimeOfDayRange?
@@ -201,18 +227,18 @@ public struct QueryCLI: Sendable {
                 limit = try parsePositiveInteger(try popValue(index: &index, flag: argument), flag: argument)
             case "--last-hours":
                 lastHours = try parsePositiveInteger(try popValue(index: &index, flag: argument), flag: argument)
-            case "--start":
+            case "--since":
                 let rawValue = try popValue(index: &index, flag: argument)
                 guard let parsed = QueryDateParser.parse(rawValue) else {
                     throw QueryCLIError.invalidISO8601(flag: argument, value: rawValue)
                 }
-                explicitStart = parsed
-            case "--end":
+                explicitSince = parsed
+            case "--until":
                 let rawValue = try popValue(index: &index, flag: argument)
                 guard let parsed = QueryDateParser.parse(rawValue) else {
                     throw QueryCLIError.invalidISO8601(flag: argument, value: rawValue)
                 }
-                explicitEnd = parsed
+                explicitUntil = parsed
             case "--camera":
                 cameras.append(try popValue(index: &index, flag: argument))
             case "--kind":
@@ -240,54 +266,57 @@ public struct QueryCLI: Sendable {
             }
         }
 
-        if lastHours != nil, explicitStart != nil || explicitEnd != nil {
+        if lastHours != nil, explicitSince != nil || explicitUntil != nil {
             throw QueryCLIError.conflictingWindowFlags
         }
 
-        if (explicitStart == nil) != (explicitEnd == nil) {
-            throw QueryCLIError.incompleteExplicitWindow
+        if explicitSince == nil, explicitUntil != nil {
+            throw QueryCLIError.untilRequiresSince
         }
 
-        let window: QueryWindow?
-        if let explicitStart, let explicitEnd {
-            guard explicitStart < explicitEnd else {
-                throw QueryCLIError.invalidWindowRange(start: explicitStart, end: explicitEnd)
+        let windowBounds: QueryWindowBounds?
+        if explicitSince != nil || explicitUntil != nil {
+            let bounds = QueryWindowBounds(since: explicitSince, until: explicitUntil)
+            if let explicitSince, let explicitUntil {
+                guard explicitSince < explicitUntil else {
+                    throw QueryCLIError.invalidWindowRange(start: explicitSince, end: explicitUntil)
+                }
             }
-            window = QueryWindow(start: explicitStart, end: explicitEnd)
+            windowBounds = bounds
         } else {
-            window = nil
+            windowBounds = nil
         }
 
         self.databasePathOverride = databasePathOverride
         self.configPath = configPath
         self.subcommand = subcommand
         self.filters = QueryFilters(
-            window: window,
             cameras: cameras,
             kinds: kinds,
             timeOfDay: timeOfDay
         )
+        self.windowBounds = windowBounds
         self.lastHours = lastHours
         self.limit = limit
         self.order = order
         self.groupBy = groupBy
     }
 
-    public func eventsRequest(now: Date = Date()) -> EventsRequest {
-        EventsRequest(limit: limit, order: order, filters: resolvedFilters(now: now))
+    public func eventsRequest(now: Date = Date()) throws -> EventsRequest {
+        EventsRequest(limit: limit, order: order, filters: try resolvedFilters(now: now))
     }
 
-    public func summaryRequest(now: Date = Date()) -> SummaryRequest {
+    public func summaryRequest(now: Date = Date()) throws -> SummaryRequest {
         SummaryRequest(
-            filters: resolvedFilters(now: now, defaultLastHours: 24),
+            filters: try resolvedFilters(now: now, defaultLastHours: 24),
             groupBy: groupBy.isEmpty ? [.camera, .kind] : groupBy
         )
     }
 
-    private func resolvedFilters(now: Date, defaultLastHours: Int? = nil) -> QueryFilters {
-        if let window = filters.window {
+    private func resolvedFilters(now: Date, defaultLastHours: Int? = nil) throws -> QueryFilters {
+        if let windowBounds {
             return QueryFilters(
-                window: window,
+                window: try windowBounds.resolve(now: now),
                 cameras: filters.cameras,
                 kinds: filters.kinds,
                 timeOfDay: filters.timeOfDay
@@ -381,9 +410,9 @@ public enum ProtectCadenceQueryRunner {
 
         switch cli.subcommand {
         case .events:
-            return .events(try database.fetchEventsResponse(cli.eventsRequest(now: now)))
+            return .events(try database.fetchEventsResponse(try cli.eventsRequest(now: now)))
         case .summary:
-            return .summary(try database.fetchSummary(cli.summaryRequest(now: now)))
+            return .summary(try database.fetchSummary(try cli.summaryRequest(now: now)))
         }
     }
 }

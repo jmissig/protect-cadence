@@ -1210,12 +1210,12 @@ struct ProtectCadenceCoreTests {
 
     @Test
     func queryCLIParsesSharedFiltersForEventsAndSummary() throws {
-        let start = "2026-03-25T01:00:00Z"
-        let end = "2026-03-25T05:00:00Z"
+        let since = "2026-03-25T01:00:00Z"
+        let until = "2026-03-25T05:00:00Z"
         let eventsCLI = try QueryCLI(arguments: [
             "events",
-            "--start", start,
-            "--end", end,
+            "--since", since,
+            "--until", until,
             "--camera", "Driveway",
             "--camera", "Backyard",
             "--kind", "person",
@@ -1226,8 +1226,8 @@ struct ProtectCadenceCoreTests {
         ])
         let summaryCLI = try QueryCLI(arguments: [
             "summary",
-            "--start", start,
-            "--end", end,
+            "--since", since,
+            "--until", until,
             "--camera", "Driveway",
             "--kind", "person",
             "--time-of-day", "22:15-06:45",
@@ -1235,9 +1235,10 @@ struct ProtectCadenceCoreTests {
             "--group-by", "kind",
         ])
 
-        #expect(eventsCLI.filters.window == QueryWindow(
-            start: QueryDateParser.parse(start)!,
-            end: QueryDateParser.parse(end)!
+        #expect(eventsCLI.filters.window == nil)
+        #expect(eventsCLI.windowBounds == QueryWindowBounds(
+            since: QueryDateParser.parse(since)!,
+            until: QueryDateParser.parse(until)!
         ))
         #expect(eventsCLI.filters.cameras == ["Driveway", "Backyard"])
         #expect(eventsCLI.filters.kinds == ["person", "vehicle"])
@@ -1248,16 +1249,66 @@ struct ProtectCadenceCoreTests {
         #expect(summaryCLI.filters.cameras == ["Driveway"])
         #expect(summaryCLI.filters.kinds == ["person"])
         #expect(summaryCLI.filters.timeOfDay == QueryTimeOfDayRange(startHour: 22, startMinute: 15, endHour: 6, endMinute: 45))
+        #expect(summaryCLI.windowBounds == QueryWindowBounds(
+            since: QueryDateParser.parse(since)!,
+            until: QueryDateParser.parse(until)!
+        ))
         #expect(summaryCLI.groupBy == [.date, .kind])
     }
 
     @Test
     func queryCLIRejectsConflictingWindowFlags() throws {
         do {
-            _ = try QueryCLI(arguments: ["events", "--last-hours", "2", "--start", "2026-03-25T01:00:00Z", "--end", "2026-03-25T02:00:00Z"])
+            _ = try QueryCLI(arguments: ["events", "--last-hours", "2", "--since", "2026-03-25T01:00:00Z", "--until", "2026-03-25T02:00:00Z"])
             Issue.record("expected conflicting window flags error")
         } catch let error as QueryCLIError {
-            #expect(error.description.contains("either --last-hours or --start/--end"))
+            #expect(error.description.contains("either --last-hours or --since/--until"))
+        }
+    }
+
+    @Test
+    func queryRequestResolutionUsesNowForMissingUpperSide() throws {
+        let now = QueryDateParser.parse("2026-03-25T05:00:00Z")!
+        let eventsCLI = try QueryCLI(arguments: [
+            "events",
+            "--since", "2026-03-25T01:00:00Z",
+        ])
+
+        let eventsRequest = try eventsCLI.eventsRequest(now: now)
+
+        #expect(eventsRequest.filters.window == QueryWindow(
+            start: QueryDateParser.parse("2026-03-25T01:00:00Z")!,
+            end: now
+        ))
+    }
+
+    @Test
+    func queryRequestResolutionRejectsInvalidResolvedWindow() throws {
+        let now = QueryDateParser.parse("2026-03-25T05:00:00Z")!
+        let cli = try QueryCLI(arguments: [
+            "events",
+            "--since", "2026-03-25T06:00:00Z",
+        ])
+
+        do {
+            _ = try cli.eventsRequest(now: now)
+            Issue.record("expected invalid resolved window error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "resolved time window must have start earlier than end, got 2026-03-25T06:00:00Z to 2026-03-25T05:00:00Z")
+        }
+    }
+
+    @Test
+    func queryCLIRejectsInvalidExplicitSinceUntilRange() throws {
+        do {
+            _ = try QueryCLI(arguments: [
+                "summary",
+                "--since", "2026-03-25T05:00:00Z",
+                "--until", "2026-03-25T05:00:00Z",
+            ])
+            Issue.record("expected invalid explicit window error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "resolved time window must have start earlier than end, got 2026-03-25T05:00:00Z to 2026-03-25T05:00:00Z")
         }
     }
 
@@ -1368,6 +1419,61 @@ struct ProtectCadenceCoreTests {
             #expect(response.events.map(\.eventID) == ["recent-event"])
         case .summary:
             Issue.record("expected events output")
+        }
+    }
+
+    @Test
+    func queryRunnerEventsCanFilterBySinceOnly() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+        let now = Date(timeIntervalSince1970: 10_000)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: now.addingTimeInterval(-2 * 60 * 60),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "older-event"
+                ),
+                EventRow(
+                    timeStart: now.addingTimeInterval(-30 * 60),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "recent-event"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try ProtectCadenceQueryRunner.run(
+            arguments: [
+                "events",
+                "--db", databasePath,
+                "--since", QueryDateParser.encode(now.addingTimeInterval(-60 * 60)),
+            ],
+            now: now
+        )
+
+        switch output {
+        case let .events(response):
+            #expect(response.filters.window == QueryWindow(start: now.addingTimeInterval(-60 * 60), end: now))
+            #expect(response.events.map(\.eventID) == ["recent-event"])
+        case .summary:
+            Issue.record("expected events output")
+        }
+    }
+
+    @Test
+    func queryCLIRejectsUntilWithoutSince() throws {
+        do {
+            _ = try QueryCLI(arguments: [
+                "summary",
+                "--until", "2026-03-25T03:00:00Z",
+            ])
+            Issue.record("expected --until requires --since error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "--until requires --since")
         }
     }
 
