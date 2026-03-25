@@ -58,6 +58,10 @@ By default, commands create or use a SQLite file named `protect-cadence.sqlite` 
 
 You can override that with `--db /path/to/protect-cadence.sqlite`.
 
+The interactive first-run `ingest` flow instead suggests a durable default under:
+
+- `~/Library/Application Support/protect-cadence/protect-cadence.sqlite`
+
 ## Auth And Config
 
 Live ingest uses this auth resolution order:
@@ -68,10 +72,11 @@ Live ingest uses this auth resolution order:
 
 The config file stores:
 
-- `controllerURL`
-- `username`
-- `password`
-- `allowInsecureTLS`
+- `auth.controllerURL`
+- `auth.username`
+- `auth.password`
+- `auth.allowInsecureTLS`
+- `ingest.databasePath`
 
 The config file is written with `0600` permissions, and its parent directory is tightened to `0700`.
 
@@ -87,9 +92,7 @@ Supported auth env vars remain:
 Recommended first-time setup:
 
 ```bash
-swift run protect-cadence auth login
-swift run protect-cadence auth status
-swift run protect-cadence ingest --last-hours 6
+swift run protect-cadence ingest
 ```
 
 ## Current Commands
@@ -98,14 +101,24 @@ swift run protect-cadence ingest --last-hours 6
 
 This is the primary ingest entrypoint and has three modes:
 
-- with no arguments, it initializes the database and returns a JSON status object
+- with no arguments, it runs an interactive first-run flow when saved auth or a saved database path is missing
 - with `--last-hours <n>`, it logs into Protect, fetches a bounded event window, normalizes settled events, and inserts deduplicated rows
 - with `--event-json`, it replays one event object or an array of event objects from disk
+
+First-run behavior:
+
+- collects auth if the config does not already have controller URL, username, password, and insecure TLS preference
+- prompts for `allowInsecureTLS` unless it was supplied by `--allow-insecure-tls` or `PROTECT_ALLOW_INSECURE_TLS`
+- prompts for a durable database path, defaulting to Application Support
+- asks whether to seed the database immediately
+- if you seed, asks how many recent hours to import, defaulting to `24`
+- prints phase-oriented progress while the live ingest is running
+- saves one config file and keeps the durable ingest config limited to `databasePath`
 
 Live ingest example:
 
 ```bash
-swift run protect-cadence auth login
+swift run protect-cadence ingest
 swift run protect-cadence ingest --last-hours 6
 ```
 
@@ -190,7 +203,7 @@ Behavior:
 
 - `auth` with no subcommand behaves like `auth status`
 - `auth login` accepts `--controller-url`, `--username`, `--password`, and `--allow-insecure-tls`
-- `auth login` prompts for any missing controller URL or username, and prompts for the password if it is not supplied by flag or env var
+- `auth login` prompts for any missing controller URL or username, prompts for the password if it is not supplied by flag or env var, and prompts for insecure TLS unless it was supplied by flag or env var
 - `auth login` stores the password in the config file
 - `auth status` reports whether the config file exists and whether it currently includes a stored password
 - `auth clear` removes the config file
@@ -201,10 +214,15 @@ Current config file shape:
 
 ```json
 {
-  "allowInsecureTLS": false,
-  "controllerURL": "https://protect.local",
-  "password": "local-password",
-  "username": "local-user"
+  "auth": {
+    "allowInsecureTLS": false,
+    "controllerURL": "https://protect.local",
+    "password": "local-password",
+    "username": "local-user"
+  },
+  "ingest": {
+    "databasePath": "/Users/example/Library/Application Support/protect-cadence/protect-cadence.sqlite"
+  }
 }
 ```
 
@@ -239,7 +257,7 @@ That fixture normalizes into two rows: one `person` row and one `vehicle` row.
 swift run protect-cadence auth login
 ```
 
-2. Initialize a database:
+2. Run the first interactive setup:
 
 ```bash
 swift run protect-cadence ingest

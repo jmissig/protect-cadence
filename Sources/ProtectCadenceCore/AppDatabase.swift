@@ -28,10 +28,26 @@ public struct ProtectCadencePaths: Sendable {
         fileManager: FileManager = .default,
         homeDirectoryURL: URL? = nil
     ) -> String {
+        defaultSupportDirectory(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
+            .appendingPathComponent("config.json")
+            .path
+    }
+
+    public static func defaultSupportDirectory(
+        fileManager: FileManager = .default,
+        homeDirectoryURL: URL? = nil
+    ) -> URL {
         let homeDirectory = homeDirectoryURL ?? fileManager.homeDirectoryForCurrentUser
         return homeDirectory
             .appendingPathComponent("Library/Application Support/protect-cadence", isDirectory: true)
-            .appendingPathComponent("config.json")
+    }
+
+    public static func defaultManagedDatabasePath(
+        fileManager: FileManager = .default,
+        homeDirectoryURL: URL? = nil
+    ) -> String {
+        defaultSupportDirectory(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
+            .appendingPathComponent("protect-cadence.sqlite")
             .path
     }
 }

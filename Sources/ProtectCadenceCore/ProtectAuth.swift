@@ -1,7 +1,7 @@
 import Darwin
 import Foundation
 
-public struct ProtectCadenceConfig: Codable, Sendable, Equatable {
+public struct ProtectCadenceAuthConfig: Codable, Sendable, Equatable {
     public let controllerURL: String
     public let username: String
     public let password: String?
@@ -17,6 +17,53 @@ public struct ProtectCadenceConfig: Codable, Sendable, Equatable {
         self.username = username
         self.password = password
         self.allowInsecureTLS = allowInsecureTLS
+    }
+}
+
+public struct ProtectCadenceIngestConfig: Codable, Sendable, Equatable {
+    public let databasePath: String
+
+    public init(databasePath: String) {
+        self.databasePath = databasePath
+    }
+}
+
+public struct ProtectCadenceConfig: Codable, Sendable, Equatable {
+    public let auth: ProtectCadenceAuthConfig?
+    public let ingest: ProtectCadenceIngestConfig?
+
+    public init(
+        auth: ProtectCadenceAuthConfig? = nil,
+        ingest: ProtectCadenceIngestConfig? = nil
+    ) {
+        self.auth = auth
+        self.ingest = ingest
+    }
+
+    public init(
+        controllerURL: String,
+        username: String,
+        password: String? = nil,
+        allowInsecureTLS: Bool = false,
+        databasePath: String? = nil
+    ) {
+        self.init(
+            auth: ProtectCadenceAuthConfig(
+                controllerURL: controllerURL,
+                username: username,
+                password: password,
+                allowInsecureTLS: allowInsecureTLS
+            ),
+            ingest: databasePath.map(ProtectCadenceIngestConfig.init(databasePath:))
+        )
+    }
+
+    public func updatingAuth(_ auth: ProtectCadenceAuthConfig?) -> ProtectCadenceConfig {
+        ProtectCadenceConfig(auth: auth, ingest: ingest)
+    }
+
+    public func updatingIngest(_ ingest: ProtectCadenceIngestConfig?) -> ProtectCadenceConfig {
+        ProtectCadenceConfig(auth: auth, ingest: ingest)
     }
 }
 
@@ -247,17 +294,17 @@ public enum ProtectAuthResolver {
         let controllerURLString = firstNonEmpty(
             overrides.controllerURL,
             environment["PROTECT_CONTROLLER_URL"],
-            resolvedConfig?.controllerURL
+            resolvedConfig?.auth?.controllerURL
         )
         let username = firstNonEmpty(
             overrides.username,
             environment["PROTECT_USERNAME"],
-            resolvedConfig?.username
+            resolvedConfig?.auth?.username
         )
         let allowInsecureTLS = firstBoolean(
             overrides.allowInsecureTLS,
             environment["PROTECT_ALLOW_INSECURE_TLS"].map(parseBooleanString),
-            resolvedConfig?.allowInsecureTLS
+            resolvedConfig?.auth?.allowInsecureTLS
         )
 
         let controllerURL: URL?
@@ -322,12 +369,18 @@ public enum ProtectAuthResolver {
             prompter: prompter
         )
 
-        let allowInsecureTLS = existingStatus.allowInsecureTLS ?? false
-        let newConfig = ProtectCadenceConfig(
-            controllerURL: normalizedControllerURLString(controllerURL),
-            username: username,
-            password: password,
-            allowInsecureTLS: allowInsecureTLS
+        let allowInsecureTLS = try resolvedAllowInsecureTLSForLogin(
+            overrides: overrides,
+            environment: environment,
+            prompter: prompter
+        )
+        let newConfig = (existingConfig ?? ProtectCadenceConfig()).updatingAuth(
+            ProtectCadenceAuthConfig(
+                controllerURL: normalizedControllerURLString(controllerURL),
+                username: username,
+                password: password,
+                allowInsecureTLS: allowInsecureTLS
+            )
         )
 
         try ProtectCadenceConfigStore.save(newConfig, to: configPath, fileManager: fileManager)
@@ -405,7 +458,7 @@ public enum ProtectAuthResolver {
     ) -> String? {
         guard let config,
               usesStoredConfigPassword(config),
-              let password = config.password?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let password = config.auth?.password?.trimmingCharacters(in: .whitespacesAndNewlines),
               !password.isEmpty else {
             return nil
         }
@@ -416,7 +469,7 @@ public enum ProtectAuthResolver {
     private static func usesStoredConfigPassword(
         _ config: ProtectCadenceConfig
     ) -> Bool {
-        guard let password = config.password?.trimmingCharacters(in: .whitespacesAndNewlines), !password.isEmpty else {
+        guard let password = config.auth?.password?.trimmingCharacters(in: .whitespacesAndNewlines), !password.isEmpty else {
             return false
         }
 
@@ -433,6 +486,22 @@ public enum ProtectAuthResolver {
         }
 
         return try prompter.promptPassword("Protect password")
+    }
+
+    private static func resolvedAllowInsecureTLSForLogin(
+        overrides: ProtectAuthOverrides,
+        environment: [String: String],
+        prompter: ProtectAuthPrompter
+    ) throws -> Bool {
+        if let explicitValue = overrides.allowInsecureTLS {
+            return explicitValue
+        }
+
+        if let environmentValue = environment["PROTECT_ALLOW_INSECURE_TLS"] {
+            return parseBooleanString(environmentValue)
+        }
+
+        return try prompter.confirm("Allow insecure TLS for this controller? This disables certificate verification.")
     }
 
     private static func resolvedValue(

@@ -229,7 +229,8 @@ struct ProtectCadenceCoreTests {
                 "https://protect.example",
                 "local-user",
             ],
-            passwordPrompts: ["local-pass"]
+            passwordPrompts: ["local-pass"],
+            confirmations: [false]
         )
 
         let response = try ProtectCadenceAuthRunner.run(
@@ -252,6 +253,30 @@ struct ProtectCadenceCoreTests {
             password: "local-pass",
             allowInsecureTLS: false
         ))
+    }
+
+    @Test
+    func authLoginPersistsNestedConfigShape() throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+
+        _ = try ProtectCadenceAuthRunner.run(
+            arguments: [
+                "login",
+                "--config", configPath,
+                "--controller-url", "https://protect.example",
+                "--username", "nested-user",
+                "--password", "nested-pass",
+            ],
+            environment: [:],
+            prompter: TestPrompter(confirmations: [false])
+        )
+
+        let data = try Data(contentsOf: URL(fileURLWithPath: configPath))
+        let json = String(decoding: data, as: UTF8.self)
+
+        #expect(json.contains("\"auth\""))
+        #expect(json.contains("\"controllerURL\""))
+        #expect(!json.contains("\"databasePath\""))
     }
 
     @Test
@@ -839,6 +864,142 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func bareIngestOnboardingSavesConfigAndSkipsSeedCleanly() async throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        let managedDatabasePath = temporaryDirectoryPath() + "/managed.sqlite"
+        let prompter = TestPrompter(
+            prompts: [
+                "https://protect.example",
+                "onboard-user",
+                managedDatabasePath,
+            ],
+            passwordPrompts: ["onboard-pass"],
+            confirmations: [false, false]
+        )
+        let output = RecordedStatusOutput()
+
+        let response = try await ProtectCadenceIngestRunner.run(
+            arguments: ["--config", configPath],
+            environment: [:],
+            prompter: prompter,
+            fileManager: .default,
+            statusOutput: output.write
+        )
+
+        #expect(response.status == "ready")
+        #expect(response.databasePath == managedDatabasePath)
+
+        let config = try ProtectCadenceConfigStore.load(from: configPath)
+        #expect(config == ProtectCadenceConfig(
+            auth: ProtectCadenceAuthConfig(
+                controllerURL: "https://protect.example",
+                username: "onboard-user",
+                password: "onboard-pass",
+                allowInsecureTLS: false
+            ),
+            ingest: ProtectCadenceIngestConfig(databasePath: managedDatabasePath)
+        ))
+        #expect(output.lines.contains("First-run setup for protect-cadence."))
+        #expect(output.lines.contains("Saved config. Next time, run something like: `protect-cadence ingest --last-hours 6`"))
+    }
+
+    @Test
+    func bareIngestOnboardingSeedsDatabaseInteractively() async throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        let managedDatabasePath = temporaryDirectoryPath() + "/managed.sqlite"
+        let prompter = TestPrompter(
+            prompts: [
+                "https://protect.example",
+                "seed-user",
+                managedDatabasePath,
+                "24",
+            ],
+            passwordPrompts: ["seed-pass"],
+            confirmations: [true, true]
+        )
+        let output = RecordedStatusOutput()
+        let transport = RecordingProtectHTTPTransport(
+            responses: [
+                .init(
+                    statusCode: 200,
+                    headers: [
+                        "Set-Cookie": "TOKEN=test-session; Path=/; HttpOnly",
+                        "x-csrf-token": "csrf-test-token",
+                    ],
+                    body: Data("{}".utf8)
+                ),
+                .init(
+                    statusCode: 200,
+                    headers: [:],
+                    body: try fixtureData("events-response.json")
+                ),
+                .init(
+                    statusCode: 200,
+                    headers: [:],
+                    body: try fixtureData("cameras-response.json")
+                ),
+            ]
+        )
+
+        let response = try await ProtectCadenceIngestRunner.run(
+            arguments: ["--config", configPath],
+            now: Date(timeIntervalSince1970: 1_710_003_600),
+            environment: [:],
+            prompter: prompter,
+            fileManager: .default,
+            statusOutput: output.write,
+            clientFactory: { configuration in
+                ProtectControllerClient(configuration: configuration, transport: transport)
+            }
+        )
+
+        #expect(response.status == "ok")
+        #expect(response.databasePath == managedDatabasePath)
+        #expect(response.fetchedEventCount == 5)
+        #expect(output.lines.contains("Authenticating with Protect..."))
+        #expect(output.lines.contains("Fetching recent events..."))
+        #expect(output.lines.contains("Writing rows to SQLite..."))
+        #expect(output.lines.contains("Next time, run something like: `protect-cadence ingest --last-hours 6`"))
+    }
+
+    @Test
+    func helpTextIncludesInteractiveIngestGuidance() {
+        let help = ProtectCadenceHelp.text(for: ["ingest", "--help"])
+
+        #expect(help?.contains("Interactive first-run setup") == true)
+    }
+
+    @Test
+    func bareIngestRequiresExplicitModeAfterSetup() async throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        try ProtectCadenceConfigStore.save(
+            ProtectCadenceConfig(
+                auth: ProtectCadenceAuthConfig(
+                    controllerURL: "https://protect.example",
+                    username: "ready-user",
+                    password: "ready-pass",
+                    allowInsecureTLS: false
+                ),
+                ingest: ProtectCadenceIngestConfig(databasePath: temporaryDatabasePath())
+            ),
+            to: configPath
+        )
+
+        do {
+            _ = try await ProtectCadenceIngestRunner.run(
+                arguments: ["--config", configPath],
+                environment: [:],
+                prompter: TestPrompter(),
+                fileManager: .default,
+                statusOutput: { _ in }
+            )
+            Issue.record("expected missing mode error")
+        } catch let error as IngestCLIError {
+            #expect(error.description == "no ingest mode selected; try --last-hours <n> or --event-json <file>")
+        }
+    }
+
+    @Test
     func queryCLIRejectsInvalidLastHours() throws {
         do {
             _ = try QueryCLI(arguments: ["summary", "--last-hours", "0"])
@@ -1316,5 +1477,13 @@ private final class TestPrompter: ProtectAuthPrompter, @unchecked Sendable {
             throw ProtectAuthResolutionError.inputUnavailable(message)
         }
         return confirmations.removeFirst()
+    }
+}
+
+private final class RecordedStatusOutput: @unchecked Sendable {
+    private(set) var lines: [String] = []
+
+    func write(_ line: String) {
+        lines.append(line)
     }
 }

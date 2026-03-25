@@ -1,5 +1,28 @@
 import Foundation
 
+public enum ProtectIngestPhase: Sendable {
+    case authenticating
+    case fetchingEvents
+    case fetchingCameras
+    case normalizingEvents
+    case writingRows
+
+    var message: String {
+        switch self {
+        case .authenticating:
+            return "Authenticating with Protect..."
+        case .fetchingEvents:
+            return "Fetching recent events..."
+        case .fetchingCameras:
+            return "Resolving camera names..."
+        case .normalizingEvents:
+            return "Normalizing events..."
+        case .writingRows:
+            return "Writing rows to SQLite..."
+        }
+    }
+}
+
 public enum ProtectIngestError: Error, CustomStringConvertible {
     case conflictingModes
     case invalidFixtureJSON
@@ -76,12 +99,15 @@ public final class ProtectIngestService {
 
     public func ingestControllerEvents(
         window: QueryWindow,
-        snapshotDirectory: URL? = nil
+        snapshotDirectory: URL? = nil,
+        phaseReporter: (@Sendable (ProtectIngestPhase) -> Void)? = nil
     ) async throws -> IngestResponse {
         guard let client else {
             return readyResponse()
         }
 
+        phaseReporter?(.authenticating)
+        phaseReporter?(.fetchingEvents)
         let fetchedPayloads = try await client.fetchRecentEvents(window: window)
         let settledPayloads = fetchedPayloads.filter(\.isSettled)
         let ignoredUnsettledCount = fetchedPayloads.count - settledPayloads.count
@@ -90,6 +116,9 @@ public final class ProtectIngestService {
             payload.currentCameraName == nil && payload.cameraLookupKey != nil
         }
 
+        if needsCameraLookup {
+            phaseReporter?(.fetchingCameras)
+        }
         let cameras = needsCameraLookup ? try await client.fetchCameras() : []
         let cameraNamesByID: [String: String] = Dictionary(
             uniqueKeysWithValues: cameras.compactMap { camera in
@@ -107,7 +136,9 @@ public final class ProtectIngestService {
             )
         }
 
+        phaseReporter?(.normalizingEvents)
         let result = try normalizedRows(from: settledPayloads, cameraNamesByID: cameraNamesByID)
+        phaseReporter?(.writingRows)
         let insertedRowCount = try database.insertIgnoringDuplicates(result.rows)
 
         return IngestResponse(
