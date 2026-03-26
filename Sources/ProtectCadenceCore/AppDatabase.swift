@@ -163,7 +163,7 @@ public struct QueryWindow: Codable, Sendable, Equatable {
 }
 
 public enum CountSemantics: String, Codable, Sendable {
-    case rows
+    case events
 }
 
 public struct EventsRequest: Sendable {
@@ -191,7 +191,7 @@ public struct EventsResponse: Codable, Sendable {
         command: String,
         databasePath: String,
         filters: QueryFilters,
-        countSemantics: CountSemantics = .rows,
+        countSemantics: CountSemantics = .events,
         events: [EventRow]
     ) {
         self.command = command
@@ -208,29 +208,29 @@ public struct IngestResponse: Codable, Sendable {
     public let command: String
     public let databasePath: String
     public let window: QueryWindow?
-    public let fetchedEventCount: Int
-    public let normalizedRowCount: Int
-    public let insertedRowCount: Int
-    public let ignoredEventCount: Int
+    public let fetchedSourceEventCount: Int
+    public let normalizedEventCount: Int
+    public let insertedEventCount: Int
+    public let ignoredSourceEventCount: Int
     public let status: String
 
     public init(
         command: String,
         databasePath: String,
         window: QueryWindow? = nil,
-        fetchedEventCount: Int,
-        normalizedRowCount: Int,
-        insertedRowCount: Int,
-        ignoredEventCount: Int,
+        fetchedSourceEventCount: Int,
+        normalizedEventCount: Int,
+        insertedEventCount: Int,
+        ignoredSourceEventCount: Int,
         status: String
     ) {
         self.command = command
         self.databasePath = databasePath
         self.window = window
-        self.fetchedEventCount = fetchedEventCount
-        self.normalizedRowCount = normalizedRowCount
-        self.insertedRowCount = insertedRowCount
-        self.ignoredEventCount = ignoredEventCount
+        self.fetchedSourceEventCount = fetchedSourceEventCount
+        self.normalizedEventCount = normalizedEventCount
+        self.insertedEventCount = insertedEventCount
+        self.ignoredSourceEventCount = ignoredSourceEventCount
         self.status = status
     }
 }
@@ -247,13 +247,13 @@ public struct SummaryRequest: Sendable {
 
 public struct SummaryGroup: Codable, Sendable, Equatable {
     public let group: [String: String]
-    public let rowCount: Int
-    public let distinctEventCount: Int
+    public let eventCount: Int
+    public let sourceEventCount: Int
 
-    public init(group: [String: String], rowCount: Int, distinctEventCount: Int) {
+    public init(group: [String: String], eventCount: Int, sourceEventCount: Int) {
         self.group = group
-        self.rowCount = rowCount
-        self.distinctEventCount = distinctEventCount
+        self.eventCount = eventCount
+        self.sourceEventCount = sourceEventCount
     }
 }
 
@@ -262,8 +262,8 @@ public struct SummaryResponse: Codable, Sendable {
     public let databasePath: String
     public let filters: QueryFilters
     public let countSemantics: CountSemantics
-    public let totalRows: Int
-    public let distinctEventCount: Int
+    public let totalEventCount: Int
+    public let totalSourceEventCount: Int
     public let groupBy: [SummaryGroupBy]
     public let groups: [SummaryGroup]
 
@@ -271,9 +271,9 @@ public struct SummaryResponse: Codable, Sendable {
         command: String,
         databasePath: String,
         filters: QueryFilters,
-        countSemantics: CountSemantics = .rows,
-        totalRows: Int,
-        distinctEventCount: Int,
+        countSemantics: CountSemantics = .events,
+        totalEventCount: Int,
+        totalSourceEventCount: Int,
         groupBy: [SummaryGroupBy],
         groups: [SummaryGroup]
     ) {
@@ -281,8 +281,8 @@ public struct SummaryResponse: Codable, Sendable {
         self.databasePath = databasePath
         self.filters = filters
         self.countSemantics = countSemantics
-        self.totalRows = totalRows
-        self.distinctEventCount = distinctEventCount
+        self.totalEventCount = totalEventCount
+        self.totalSourceEventCount = totalSourceEventCount
         self.groupBy = groupBy
         self.groups = groups
     }
@@ -408,7 +408,7 @@ public final class ProtectCadenceDatabase {
         try dbQueue.read { db in
             let whereClause = try eventWhereClause(for: request.filters)
 
-            let totalRows = try Int.fetchOne(
+            let totalEventCount = try Int.fetchOne(
                 db,
                 sql: """
                     SELECT COUNT(*)
@@ -418,7 +418,7 @@ public final class ProtectCadenceDatabase {
                 arguments: whereClause.arguments
             ) ?? 0
 
-            let distinctEventCount = try Int.fetchOne(
+            let totalSourceEventCount = try Int.fetchOne(
                 db,
                 sql: """
                     SELECT COUNT(DISTINCT event_id)
@@ -434,8 +434,8 @@ public final class ProtectCadenceDatabase {
                 command: ProtectCadenceCommand.query.rawValue,
                 databasePath: path,
                 filters: request.filters,
-                totalRows: totalRows,
-                distinctEventCount: distinctEventCount,
+                totalEventCount: totalEventCount,
+                totalSourceEventCount: totalSourceEventCount,
                 groupBy: request.groupBy,
                 groups: groups
             )
@@ -450,7 +450,7 @@ public final class ProtectCadenceDatabase {
         let selectColumns = request.groupBy.map { "\($0.selectSQL) AS \($0.alias)" }.joined(separator: ", ")
         let groupColumns = request.groupBy.map(\.alias).joined(separator: ", ")
         let sql = """
-            SELECT \(selectColumns), COUNT(*) AS row_count, COUNT(DISTINCT event_id) AS distinct_event_count
+            SELECT \(selectColumns), COUNT(*) AS event_count, COUNT(DISTINCT event_id) AS source_event_count
             FROM \(EventRow.databaseTableName)
             \(whereClause.sql)
             GROUP BY \(groupColumns)
@@ -464,8 +464,8 @@ public final class ProtectCadenceDatabase {
             }
             return SummaryGroup(
                 group: values,
-                rowCount: row["row_count"],
-                distinctEventCount: row["distinct_event_count"]
+                eventCount: row["event_count"],
+                sourceEventCount: row["source_event_count"]
             )
         }
     }

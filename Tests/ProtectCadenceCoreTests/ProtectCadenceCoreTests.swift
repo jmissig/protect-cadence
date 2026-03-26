@@ -740,13 +740,13 @@ struct ProtectCadenceCoreTests {
             )
         )
 
-        #expect(summary.totalRows == 4)
-        #expect(summary.distinctEventCount == 3)
+        #expect(summary.totalEventCount == 4)
+        #expect(summary.totalSourceEventCount == 3)
         #expect(
             summary.groups == [
-                SummaryGroup(group: ["camera": "Backyard", "kind": "animal"], rowCount: 1, distinctEventCount: 1),
-                SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 2, distinctEventCount: 2),
-                SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], rowCount: 1, distinctEventCount: 1),
+                SummaryGroup(group: ["camera": "Backyard", "kind": "animal"], eventCount: 1, sourceEventCount: 1),
+                SummaryGroup(group: ["camera": "Driveway", "kind": "person"], eventCount: 2, sourceEventCount: 2),
+                SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], eventCount: 1, sourceEventCount: 1),
             ]
         )
     }
@@ -790,9 +790,9 @@ struct ProtectCadenceCoreTests {
             )
         )
 
-        #expect(summary.totalRows == 1)
-        #expect(summary.distinctEventCount == 1)
-        #expect(summary.groups == [SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 1, distinctEventCount: 1)])
+        #expect(summary.totalEventCount == 1)
+        #expect(summary.totalSourceEventCount == 1)
+        #expect(summary.groups == [SummaryGroup(group: ["camera": "Driveway", "kind": "person"], eventCount: 1, sourceEventCount: 1)])
     }
 
     @Test
@@ -834,11 +834,11 @@ struct ProtectCadenceCoreTests {
             )
         )
 
-        #expect(summary.totalRows == 3)
-        #expect(summary.distinctEventCount == 2)
+        #expect(summary.totalEventCount == 3)
+        #expect(summary.totalSourceEventCount == 2)
         #expect(summary.groups == [
-            SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 2, distinctEventCount: 2),
-            SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], rowCount: 1, distinctEventCount: 1),
+            SummaryGroup(group: ["camera": "Driveway", "kind": "person"], eventCount: 2, sourceEventCount: 2),
+            SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], eventCount: 1, sourceEventCount: 1),
         ])
     }
 
@@ -901,13 +901,13 @@ struct ProtectCadenceCoreTests {
             )
         )
 
-        #expect(summary.totalRows == 4)
-        #expect(summary.distinctEventCount == 3)
+        #expect(summary.totalEventCount == 4)
+        #expect(summary.totalSourceEventCount == 3)
         #expect(summary.groups == [
             SummaryGroup(
                 group: ["date": "2026-03-25", "hour": "08:00"],
-                rowCount: 4,
-                distinctEventCount: 3
+                eventCount: 4,
+                sourceEventCount: 3
             ),
         ])
     }
@@ -927,8 +927,8 @@ struct ProtectCadenceCoreTests {
             )
         )
 
-        #expect(summary.totalRows == 0)
-        #expect(summary.distinctEventCount == 0)
+        #expect(summary.totalEventCount == 0)
+        #expect(summary.totalSourceEventCount == 0)
         #expect(summary.groups.isEmpty)
     }
 
@@ -972,8 +972,8 @@ struct ProtectCadenceCoreTests {
 
         #expect(summary.groupBy == [.date, .hour])
         #expect(summary.groups == [
-            SummaryGroup(group: ["date": "2026-03-24", "hour": "23:00"], rowCount: 2, distinctEventCount: 2),
-            SummaryGroup(group: ["date": "2026-03-25", "hour": "00:00"], rowCount: 1, distinctEventCount: 1),
+            SummaryGroup(group: ["date": "2026-03-24", "hour": "23:00"], eventCount: 2, sourceEventCount: 2),
+            SummaryGroup(group: ["date": "2026-03-25", "hour": "00:00"], eventCount: 1, sourceEventCount: 1),
         ])
     }
 
@@ -1018,12 +1018,12 @@ struct ProtectCadenceCoreTests {
             )
         )
 
-        #expect(summary.totalRows == 2)
-        #expect(summary.distinctEventCount == 2)
+        #expect(summary.totalEventCount == 2)
+        #expect(summary.totalSourceEventCount == 2)
         #expect(summary.groupBy == [.weekday])
         #expect(summary.groups == [
-            SummaryGroup(group: ["weekday": "sat"], rowCount: 1, distinctEventCount: 1),
-            SummaryGroup(group: ["weekday": "sun"], rowCount: 1, distinctEventCount: 1),
+            SummaryGroup(group: ["weekday": "sat"], eventCount: 1, sourceEventCount: 1),
+            SummaryGroup(group: ["weekday": "sun"], eventCount: 1, sourceEventCount: 1),
         ])
     }
 
@@ -1053,17 +1053,18 @@ struct ProtectCadenceCoreTests {
         switch output {
         case let .summary(response):
             #expect(response.command == "protect-cadence query")
-            #expect(response.totalRows == 1)
-            #expect(response.distinctEventCount == 1)
-            #expect(response.countSemantics == .rows)
-            #expect(response.groups == [SummaryGroup(group: ["camera": "Porch", "kind": "package"], rowCount: 1, distinctEventCount: 1)])
+            #expect(response.totalEventCount == 1)
+            #expect(response.totalSourceEventCount == 1)
+            #expect(response.countSemantics == .events)
+            #expect(response.groups == [SummaryGroup(group: ["camera": "Porch", "kind": "package"], eventCount: 1, sourceEventCount: 1)])
             #expect(response.filters.window == QueryWindow(start: now.addingTimeInterval(-2 * 60 * 60), end: now))
 
             let json = try JSONOutput.encode(output)
             #expect(json.contains("\"command\""))
             #expect(json.contains("\"filters\""))
-            #expect(json.contains("\"distinctEventCount\""))
-            #expect(json.contains("\"rowCount\""))
+            #expect(json.contains("\"totalSourceEventCount\""))
+            #expect(json.contains("\"eventCount\""))
+            #expect(json.contains("\"sourceEventCount\""))
         case .events:
             Issue.record("expected summary output")
         }
@@ -1097,8 +1098,8 @@ struct ProtectCadenceCoreTests {
             switch queryOutput {
             case let .summary(response):
                 #expect(response.command == "protect-cadence query")
-                #expect(response.totalRows == 1)
-                #expect(response.distinctEventCount == 1)
+                #expect(response.totalEventCount == 1)
+                #expect(response.totalSourceEventCount == 1)
             case .events:
                 Issue.record("expected summary output")
             }
@@ -1122,9 +1123,9 @@ struct ProtectCadenceCoreTests {
         switch output {
         case let .ingest(response):
             #expect(response.command == "protect-cadence ingest")
-            #expect(response.fetchedEventCount == 5)
-            #expect(response.normalizedRowCount == 5)
-            #expect(response.insertedRowCount == 5)
+            #expect(response.fetchedSourceEventCount == 5)
+            #expect(response.normalizedEventCount == 5)
+            #expect(response.insertedEventCount == 5)
         case .query, .auth:
             Issue.record("expected ingest output")
         }
@@ -1208,7 +1209,7 @@ struct ProtectCadenceCoreTests {
         )
 
         #expect(response.command == "protect-cadence ingest")
-        #expect(response.fetchedEventCount == 5)
+        #expect(response.fetchedSourceEventCount == 5)
     }
 
     @Test
@@ -1303,10 +1304,10 @@ struct ProtectCadenceCoreTests {
 
         #expect(response.status == "ok")
         #expect(response.databasePath == managedDatabasePath)
-        #expect(response.fetchedEventCount == 5)
+        #expect(response.fetchedSourceEventCount == 5)
         #expect(output.lines.contains("Authenticating with Protect..."))
-        #expect(output.lines.contains("Fetching recent events..."))
-        #expect(output.lines.contains("Writing rows to SQLite..."))
+        #expect(output.lines.contains("Fetching recent Protect events..."))
+        #expect(output.lines.contains("Writing events to SQLite..."))
         #expect(output.lines.contains("Next time, run something like: `protect-cadence ingest --last-hours 6`"))
     }
 
@@ -1532,7 +1533,7 @@ struct ProtectCadenceCoreTests {
         case let .events(response):
             #expect(response.databasePath == databasePath)
             #expect(response.events.map(\.eventID) == ["event-2"])
-            #expect(response.countSemantics == .rows)
+            #expect(response.countSemantics == .events)
         case .summary:
             Issue.record("expected events output")
         }
@@ -1714,8 +1715,8 @@ struct ProtectCadenceCoreTests {
         switch summaryOutput {
         case let .summary(response):
             #expect(response.filters.weekdays == [.sun])
-            #expect(response.totalRows == 1)
-            #expect(response.groups == [SummaryGroup(group: ["weekday": "sun"], rowCount: 1, distinctEventCount: 1)])
+            #expect(response.totalEventCount == 1)
+            #expect(response.groups == [SummaryGroup(group: ["weekday": "sun"], eventCount: 1, sourceEventCount: 1)])
         case .events:
             Issue.record("expected summary output")
         }
@@ -1855,10 +1856,10 @@ struct ProtectCadenceCoreTests {
             snapshotDirectory: URL(fileURLWithPath: snapshotDirectory, isDirectory: true)
         )
 
-        #expect(response.fetchedEventCount == 5)
-        #expect(response.normalizedRowCount == 4)
-        #expect(response.insertedRowCount == 4)
-        #expect(response.ignoredEventCount == 2)
+        #expect(response.fetchedSourceEventCount == 5)
+        #expect(response.normalizedEventCount == 4)
+        #expect(response.insertedEventCount == 4)
+        #expect(response.ignoredSourceEventCount == 2)
 
         let recent = try database.fetchRecent(RecentEventsRequest(limit: 10))
         #expect(recent.map(\.kind).sorted() == ["animal", "package", "person", "vehicle"])
@@ -1881,11 +1882,11 @@ struct ProtectCadenceCoreTests {
         let first = try service.ingestFixtureEvents(from: eventData, cameraLookupData: cameraData)
         let second = try service.ingestFixtureEvents(from: eventData, cameraLookupData: cameraData)
 
-        #expect(first.fetchedEventCount == 5)
-        #expect(first.normalizedRowCount == 5)
-        #expect(first.insertedRowCount == 5)
-        #expect(first.ignoredEventCount == 1)
-        #expect(second.insertedRowCount == 0)
+        #expect(first.fetchedSourceEventCount == 5)
+        #expect(first.normalizedEventCount == 5)
+        #expect(first.insertedEventCount == 5)
+        #expect(first.ignoredSourceEventCount == 1)
+        #expect(second.insertedEventCount == 0)
 
         let recent = try database.fetchRecent(RecentEventsRequest(limit: 10))
         #expect(Set(recent.compactMap(\.cameraID)) == ["camera-001", "camera-002"])

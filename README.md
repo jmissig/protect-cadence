@@ -5,7 +5,7 @@
 It is built around two normal tasks:
 
 - ingest recent Protect events into SQLite
-- query event rows or a short grouped summary
+- query events or a short grouped summary
 
 ## Install
 
@@ -104,7 +104,8 @@ Notes:
 - `--day-of-week` is repeatable and uses local weekdays: `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat`
 - `--weekday` expands to Monday through Friday
 - `--weekend` expands to Saturday and Sunday
-- `query summary` buckets include both `rowCount` and `distinctEventCount`
+- counts treat each normalized cadence event as one event
+- `query summary` includes `eventCount` plus `sourceEventCount` provenance based on distinct Protect `event_id`
 - output is JSON
 
 ## Overrides

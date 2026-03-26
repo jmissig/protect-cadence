@@ -2,23 +2,23 @@ import Foundation
 
 public enum ProtectIngestPhase: Sendable {
     case authenticating
-    case fetchingEvents
+    case fetchingSourceEvents
     case fetchingCameras
     case normalizingEvents
-    case writingRows
+    case writingEvents
 
     var message: String {
         switch self {
         case .authenticating:
             return "Authenticating with Protect..."
-        case .fetchingEvents:
-            return "Fetching recent events..."
+        case .fetchingSourceEvents:
+            return "Fetching recent Protect events..."
         case .fetchingCameras:
             return "Resolving camera names..."
         case .normalizingEvents:
             return "Normalizing events..."
-        case .writingRows:
-            return "Writing rows to SQLite..."
+        case .writingEvents:
+            return "Writing events to SQLite..."
         }
     }
 }
@@ -50,10 +50,10 @@ public final class ProtectIngestService {
         IngestResponse(
             command: ProtectCadenceCommand.ingest.rawValue,
             databasePath: database.path,
-            fetchedEventCount: 0,
-            normalizedRowCount: 0,
-            insertedRowCount: 0,
-            ignoredEventCount: 0,
+            fetchedSourceEventCount: 0,
+            normalizedEventCount: 0,
+            insertedEventCount: 0,
+            ignoredSourceEventCount: 0,
             status: "ready"
         )
     }
@@ -84,15 +84,15 @@ public final class ProtectIngestService {
             fallbackCameraName: fallbackCameraName,
             cameraNamesByID: cameraNamesByID
         )
-        let insertedRowCount = try database.insertIgnoringDuplicates(result.rows)
+        let insertedEventCount = try database.insertIgnoringDuplicates(result.rows)
 
         return IngestResponse(
             command: ProtectCadenceCommand.ingest.rawValue,
             databasePath: database.path,
-            fetchedEventCount: payloads.count,
-            normalizedRowCount: result.rows.count,
-            insertedRowCount: insertedRowCount,
-            ignoredEventCount: result.ignoredEventCount,
+            fetchedSourceEventCount: payloads.count,
+            normalizedEventCount: result.rows.count,
+            insertedEventCount: insertedEventCount,
+            ignoredSourceEventCount: result.ignoredSourceEventCount,
             status: "ok"
         )
     }
@@ -107,7 +107,7 @@ public final class ProtectIngestService {
         }
 
         phaseReporter?(.authenticating)
-        phaseReporter?(.fetchingEvents)
+        phaseReporter?(.fetchingSourceEvents)
         let fetchedPayloads = try await client.fetchRecentEvents(window: window)
         let settledPayloads = fetchedPayloads.filter(\.isSettled)
         let ignoredUnsettledCount = fetchedPayloads.count - settledPayloads.count
@@ -138,17 +138,17 @@ public final class ProtectIngestService {
 
         phaseReporter?(.normalizingEvents)
         let result = try normalizedRows(from: settledPayloads, cameraNamesByID: cameraNamesByID)
-        phaseReporter?(.writingRows)
-        let insertedRowCount = try database.insertIgnoringDuplicates(result.rows)
+        phaseReporter?(.writingEvents)
+        let insertedEventCount = try database.insertIgnoringDuplicates(result.rows)
 
         return IngestResponse(
             command: ProtectCadenceCommand.ingest.rawValue,
             databasePath: database.path,
             window: window,
-            fetchedEventCount: fetchedPayloads.count,
-            normalizedRowCount: result.rows.count,
-            insertedRowCount: insertedRowCount,
-            ignoredEventCount: ignoredUnsettledCount + result.ignoredEventCount,
+            fetchedSourceEventCount: fetchedPayloads.count,
+            normalizedEventCount: result.rows.count,
+            insertedEventCount: insertedEventCount,
+            ignoredSourceEventCount: ignoredUnsettledCount + result.ignoredSourceEventCount,
             status: "ok"
         )
     }
@@ -175,9 +175,9 @@ public final class ProtectIngestService {
         from payloads: [ProtectEventPayload],
         fallbackCameraName: String? = nil,
         cameraNamesByID: [String: String]
-    ) throws -> (rows: [EventRow], ignoredEventCount: Int) {
+    ) throws -> (rows: [EventRow], ignoredSourceEventCount: Int) {
         var normalizedRows: [EventRow] = []
-        var ignoredEventCount = 0
+        var ignoredSourceEventCount = 0
 
         for payload in payloads {
             do {
@@ -188,15 +188,15 @@ public final class ProtectIngestService {
                 )
 
                 if rows.isEmpty {
-                    ignoredEventCount += 1
+                    ignoredSourceEventCount += 1
                 } else {
                     normalizedRows.append(contentsOf: rows)
                 }
             } catch {
-                ignoredEventCount += 1
+                ignoredSourceEventCount += 1
             }
         }
 
-        return (normalizedRows, ignoredEventCount)
+        return (normalizedRows, ignoredSourceEventCount)
     }
 }

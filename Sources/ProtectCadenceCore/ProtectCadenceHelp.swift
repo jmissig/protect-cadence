@@ -27,7 +27,7 @@ public enum ProtectCadenceHelp {
 
     Subcommands:
       ingest   Initialize or ingest Protect events
-      query    Read rows or grouped summaries from SQLite
+      query    Read events or grouped summaries from SQLite
       auth     Manage saved Protect controller auth
 
     Try:

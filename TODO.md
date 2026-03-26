@@ -26,16 +26,48 @@
 ### Query surface
 
 - Add a shared filter grammar across query commands.
-- Decide whether `recent` should stay as a narrow convenience command or evolve into a more general filtered events query.
+- Decide whether `recent` should stay as a narrow convenience command or evolve into canonical `events` plus a compatibility alias.
 - Add explicit time window controls beyond `--last-hours`, likely `--since` and `--until`.
 - Add extraction-oriented filters for `kind` and `camera`.
 - Add native time-of-day filtering, including overnight ranges such as `22:00-05:00`.
-- Add a query shape for “all matching rows in this time window and these hours of day”.
+- Add a query shape for “all matching events in this time window and these hours of day”.
+- Add recurring human-time filters that help downstream pattern reading without interpretation:
+  - `--weekday` / `--weekend`
+  - named periods such as `dawn`, `day`, `dusk`, `night` if they can be defined clearly
+  - later, only if useful, business-hours / overnight style presets
 - Add grouped summary bucketing beyond camera+kind only when there is a clear question behind it.
 - Likely useful buckets: `date`, `hour-of-day`, and `day-of-week`.
-- Decide how count semantics should be exposed when row counts and distinct-event counts differ.
-- Add `compare` only if it remains a descriptive evidence-extraction tool rather than embedded reasoning.
-- Consider a later baseline/profile command only if it stays mathematical and obviously simpler than doing the same work in OpenClaw.
+- Add distribution-oriented summaries so downstream tools can learn rhythms rather than just totals.
+  - Examples: counts by hour-of-day, day-of-week, and camera within a window.
+  - Keep outputs descriptive and evidence-oriented; do not label anything normal or abnormal.
+- Keep event counts as the primary public count semantics.
+- Keep any counts derived from distinct Protect `event_id` framed as source/provenance metadata.
+- Add `compare` as a descriptive evidence-extraction tool for window-to-window or slice-to-slice comparison.
+  - It should answer questions like “this Tuesday evening vs typical Tuesday evenings” without making anomaly judgments.
+- Add a drill-down path from aggregate output to representative raw events so downstream tools can inspect the evidence behind a bucket.
+- Consider a baseline/profile-style command only if it stays mathematical, legible, and clearly simpler than doing the same work in OpenClaw.
+- Explore whether session / cluster style outputs are useful for collapsing noisy repeated detections into activity episodes.
+  - If added, keep the primitive explicit, such as grouping events separated by less than an N-minute quiet gap.
+  - Treat this as a descriptive view over events, not an interpretation layer.
+
+### OpenClaw-facing pattern-reading support
+
+These are not requests for embedded anomaly scoring. They are requests for query and filter tools that let OpenClaw judge what is unusual.
+
+- Make it easy to compare one slice to another:
+  - same hour yesterday
+  - same weekday across prior weeks
+  - before/after a date or change
+  - one camera vs another camera
+- Make it easy to inspect shape, not just totals:
+  - when a camera usually fires
+  - when a given kind usually appears
+  - how activity distributes across hours and weekdays
+- Make it easy to collapse noisy repetition when needed:
+  - adjacent rows within N minutes
+  - quiet-gap sessionization for repeated detections
+- Make it easy to move from “summary suggests something interesting” to “show me the underlying events” in one hop.
+- Keep all of this descriptive. The CLI should expose evidence cleanly; OpenClaw should remain the judge of anomalies and household patterns.
 
 ### Schema and migrations
 
@@ -55,7 +87,8 @@
 
 - SQLite database and migrations exist.
 - Base event schema is `time_start`, `time_end`, `camera_id`, `camera`, `event_type`, `kind`, `event_id`.
-- One Protect event can normalize into multiple rows.
+- Normalized cadence rows are treated as the primary public event unit.
+- One Protect event can still normalize into multiple stored events when multiple kinds are present.
 - `protect-cadence-ingest --last-hours <n>` fetches bounded recent events from a Protect controller.
 - `protect-cadence-ingest --event-json <file>` replays one event object or an array of event objects.
 - `protect-cadence-ingest --camera-json <file>` can supply camera ID to name lookup during replay.
