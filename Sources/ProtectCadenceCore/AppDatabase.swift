@@ -487,6 +487,13 @@ public final class ProtectCadenceDatabase {
             }
         }
 
+        if !filters.weekdays.isEmpty {
+            clauses.append("strftime('%w', time_start, 'localtime') IN (\(Self.bindVariables(count: filters.weekdays.count)))")
+            for weekday in filters.weekdays {
+                arguments += [weekday.sqliteWeekdayNumber]
+            }
+        }
+
         if let timeOfDay = filters.timeOfDay {
             let comparator = timeOfDay.overnight ? "OR" : "AND"
             clauses.append("(\(Self.timeOfDayMinutesSQL) >= ? \(comparator) \(Self.timeOfDayMinutesSQL) < ?)")

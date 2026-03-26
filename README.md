@@ -82,12 +82,16 @@ protect-cadence query events --last-hours 24
 protect-cadence query events --since 2026-03-25T00:00:00Z
 protect-cadence query events --since 2026-03-25T00:00:00Z --until 2026-03-26T00:00:00Z
 protect-cadence query events --camera Driveway --kind person
+protect-cadence query events --day-of-week mon --day-of-week wed
+protect-cadence query events --weekday
+protect-cadence query events --weekend --time-of-day 22:00-06:00
 protect-cadence query events --time-of-day 22:00-06:00
 
 protect-cadence query summary
 protect-cadence query summary --last-hours 24
 protect-cadence query summary --since 2026-03-25T00:00:00Z --until 2026-03-26T00:00:00Z --group-by date
 protect-cadence query summary --group-by date --group-by kind
+protect-cadence query summary --weekday --group-by weekday --group-by hour
 ```
 
 Notes:
@@ -97,6 +101,9 @@ Notes:
 - `--since` and `--until` are the public explicit bounds
 - `--since` alone resolves to a window ending at `now`
 - `--until` requires `--since`
+- `--day-of-week` is repeatable and uses local weekdays: `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat`
+- `--weekday` expands to Monday through Friday
+- `--weekend` expands to Saturday and Sunday
 - output is JSON
 
 ## Overrides

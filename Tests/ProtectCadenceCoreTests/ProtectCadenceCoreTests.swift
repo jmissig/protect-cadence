@@ -651,6 +651,51 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func eventsRequestCanFilterByWeekday() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 23, hour: 8, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "mon-event"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 24, hour: 8, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "tue-event"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 28, hour: 8, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "sat-event"
+                ),
+            ],
+            into: database
+        )
+
+        let rows = try database.fetchEvents(
+            EventsRequest(
+                limit: 10,
+                order: .oldest,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 23, hour: 0, minute: 0),
+                        end: localDate(day: 29, hour: 0, minute: 0)
+                    ),
+                    weekdays: [.mon, .sat]
+                )
+            )
+        )
+
+        #expect(rows.map(\.eventID) == ["mon-event", "sat-event"])
+    }
+
+    @Test
     func summaryGroupsRowsByCameraAndKind() throws {
         let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
 
@@ -855,6 +900,56 @@ struct ProtectCadenceCoreTests {
         #expect(summary.groups == [
             SummaryGroup(group: ["date": "2026-03-24", "hour": "23:00"], rowCount: 2),
             SummaryGroup(group: ["date": "2026-03-25", "hour": "00:00"], rowCount: 1),
+        ])
+    }
+
+    @Test
+    func summaryCanFilterByWeekendAndGroupByWeekday() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 27, hour: 20, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "fri-event"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 28, hour: 20, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "sat-event"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 29, hour: 20, minute: 0),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "sun-event"
+                ),
+            ],
+            into: database
+        )
+
+        let summary = try database.fetchSummary(
+            SummaryRequest(
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 27, hour: 0, minute: 0),
+                        end: localDate(day: 30, hour: 0, minute: 0)
+                    ),
+                    weekdays: QueryWeekday.weekend
+                ),
+                groupBy: [.weekday]
+            )
+        )
+
+        #expect(summary.totalRows == 2)
+        #expect(summary.distinctEventCount == 2)
+        #expect(summary.groupBy == [.weekday])
+        #expect(summary.groups == [
+            SummaryGroup(group: ["weekday": "sat"], rowCount: 1),
+            SummaryGroup(group: ["weekday": "sun"], rowCount: 1),
         ])
     }
 
@@ -1220,6 +1315,8 @@ struct ProtectCadenceCoreTests {
             "--camera", "Backyard",
             "--kind", "person",
             "--kind", "vehicle",
+            "--day-of-week", "mon",
+            "--weekend",
             "--time-of-day", "22:15-06:45",
             "--order", "oldest",
             "--limit", "25",
@@ -1230,6 +1327,8 @@ struct ProtectCadenceCoreTests {
             "--until", until,
             "--camera", "Driveway",
             "--kind", "person",
+            "--weekday",
+            "--day-of-week", "sun",
             "--time-of-day", "22:15-06:45",
             "--group-by", "date",
             "--group-by", "kind",
@@ -1242,18 +1341,33 @@ struct ProtectCadenceCoreTests {
         ))
         #expect(eventsCLI.filters.cameras == ["Driveway", "Backyard"])
         #expect(eventsCLI.filters.kinds == ["person", "vehicle"])
+        #expect(eventsCLI.filters.weekdays == [.mon, .sun, .sat])
         #expect(eventsCLI.filters.timeOfDay == QueryTimeOfDayRange(startHour: 22, startMinute: 15, endHour: 6, endMinute: 45))
         #expect(eventsCLI.order == .oldest)
         #expect(eventsCLI.limit == 25)
 
         #expect(summaryCLI.filters.cameras == ["Driveway"])
         #expect(summaryCLI.filters.kinds == ["person"])
+        #expect(summaryCLI.filters.weekdays == [.mon, .tue, .wed, .thu, .fri, .sun])
         #expect(summaryCLI.filters.timeOfDay == QueryTimeOfDayRange(startHour: 22, startMinute: 15, endHour: 6, endMinute: 45))
         #expect(summaryCLI.windowBounds == QueryWindowBounds(
             since: QueryDateParser.parse(since)!,
             until: QueryDateParser.parse(until)!
         ))
         #expect(summaryCLI.groupBy == [.date, .kind])
+    }
+
+    @Test
+    func queryCLIRejectsInvalidDayOfWeek() throws {
+        do {
+            _ = try QueryCLI(arguments: [
+                "events",
+                "--day-of-week", "monday",
+            ])
+            Issue.record("expected invalid weekday error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "invalid value 'monday' for --day-of-week, expected sun, mon, tue, wed, thu, fri, or sat")
+        }
     }
 
     @Test
@@ -1461,6 +1575,74 @@ struct ProtectCadenceCoreTests {
             #expect(response.events.map(\.eventID) == ["recent-event"])
         case .summary:
             Issue.record("expected events output")
+        }
+    }
+
+    @Test
+    func queryRunnerAppliesWeekdayFiltersToEventsAndSummary() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 27, hour: 21, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "fri-event"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 28, hour: 21, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "sat-event"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 29, hour: 21, minute: 0),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "sun-event"
+                ),
+            ],
+            into: database
+        )
+
+        let eventsOutput = try ProtectCadenceQueryRunner.run(
+            arguments: [
+                "events",
+                "--db", databasePath,
+                "--since", "2026-03-27T00:00:00-07:00",
+                "--until", "2026-03-30T00:00:00-07:00",
+                "--weekend",
+                "--order", "oldest",
+            ]
+        )
+        let summaryOutput = try ProtectCadenceQueryRunner.run(
+            arguments: [
+                "summary",
+                "--db", databasePath,
+                "--since", "2026-03-27T00:00:00-07:00",
+                "--until", "2026-03-30T00:00:00-07:00",
+                "--day-of-week", "sun",
+                "--group-by", "weekday",
+            ]
+        )
+
+        switch eventsOutput {
+        case let .events(response):
+            #expect(response.filters.weekdays == [.sun, .sat])
+            #expect(response.events.map(\.eventID) == ["sat-event", "sun-event"])
+        case .summary:
+            Issue.record("expected events output")
+        }
+
+        switch summaryOutput {
+        case let .summary(response):
+            #expect(response.filters.weekdays == [.sun])
+            #expect(response.totalRows == 1)
+            #expect(response.groups == [SummaryGroup(group: ["weekday": "sun"], rowCount: 1)])
+        case .events:
+            Issue.record("expected summary output")
         }
     }
 
@@ -1710,6 +1892,26 @@ struct ProtectCadenceCoreTests {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("sqlite")
             .path
+    }
+
+    private func localDate(
+        year: Int = 2026,
+        month: Int = 3,
+        day: Int,
+        hour: Int,
+        minute: Int,
+        timeZoneID: String = "America/Los_Angeles"
+    ) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: timeZoneID)!
+        return calendar.date(from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: year,
+            month: month,
+            day: day,
+            hour: hour,
+            minute: minute
+        ))!
     }
 
     private func temporaryDirectoryPath() -> String {

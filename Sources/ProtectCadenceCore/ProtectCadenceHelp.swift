@@ -94,6 +94,10 @@ public enum ProtectCadenceHelp {
       --last-hours <n>           Recent window ending now
       --camera <name>            Repeatable display-name filter
       --kind <kind>              Repeatable kind filter
+      --day-of-week <sun|mon|tue|wed|thu|fri|sat>
+                                Repeatable local weekday filter
+      --weekday                  Include Monday through Friday
+      --weekend                  Include Saturday and Sunday
       --time-of-day <HH:MM-HH:MM>
                                 Local time-of-day filter, supports overnight ranges
       --limit <n>                Row limit, default 50
@@ -111,6 +115,10 @@ public enum ProtectCadenceHelp {
       --last-hours <n>           Summary window ending now, default 24
       --camera <name>            Repeatable display-name filter
       --kind <kind>              Repeatable kind filter
+      --day-of-week <sun|mon|tue|wed|thu|fri|sat>
+                                Repeatable local weekday filter
+      --weekday                  Include Monday through Friday
+      --weekend                  Include Saturday and Sunday
       --time-of-day <HH:MM-HH:MM>
                                 Local time-of-day filter, supports overnight ranges
       --group-by <camera|kind|date|hour|weekday>

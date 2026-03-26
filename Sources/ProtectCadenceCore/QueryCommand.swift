@@ -18,6 +18,38 @@ public enum SummaryGroupBy: String, Codable, Sendable, CaseIterable {
     case weekday
 }
 
+public enum QueryWeekday: String, Codable, Sendable, CaseIterable {
+    case sun
+    case mon
+    case tue
+    case wed
+    case thu
+    case fri
+    case sat
+
+    public var sqliteWeekdayNumber: String {
+        switch self {
+        case .sun:
+            return "0"
+        case .mon:
+            return "1"
+        case .tue:
+            return "2"
+        case .wed:
+            return "3"
+        case .thu:
+            return "4"
+        case .fri:
+            return "5"
+        case .sat:
+            return "6"
+        }
+    }
+
+    public static let weekdays: [Self] = [.mon, .tue, .wed, .thu, .fri]
+    public static let weekend: [Self] = [.sun, .sat]
+}
+
 public struct QueryTimeOfDayRange: Codable, Sendable, Equatable {
     public let startHour: Int
     public let startMinute: Int
@@ -56,17 +88,20 @@ public struct QueryFilters: Codable, Sendable, Equatable {
     public let window: QueryWindow?
     public let cameras: [String]
     public let kinds: [String]
+    public let weekdays: [QueryWeekday]
     public let timeOfDay: QueryTimeOfDayRange?
 
     public init(
         window: QueryWindow? = nil,
         cameras: [String] = [],
         kinds: [String] = [],
+        weekdays: [QueryWeekday] = [],
         timeOfDay: QueryTimeOfDayRange? = nil
     ) {
         self.window = window
         self.cameras = cameras
         self.kinds = kinds
+        self.weekdays = weekdays
         self.timeOfDay = timeOfDay
     }
 }
@@ -105,6 +140,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
     case invalidPositiveInteger(flag: String, value: String)
     case invalidISO8601(flag: String, value: String)
     case invalidTimeOfDay(String)
+    case invalidWeekday(String)
     case invalidOrder(String)
     case invalidGroupBy(String)
     case conflictingWindowFlags
@@ -129,6 +165,8 @@ public enum QueryCLIError: Error, CustomStringConvertible {
             return "invalid ISO8601 value '\(value)' for \(flag)"
         case let .invalidTimeOfDay(value):
             return "invalid time-of-day range '\(value)', expected HH:MM-HH:MM"
+        case let .invalidWeekday(value):
+            return "invalid value '\(value)' for --day-of-week, expected sun, mon, tue, wed, thu, fri, or sat"
         case let .invalidOrder(value):
             return "invalid value '\(value)' for --order, expected newest or oldest"
         case let .invalidGroupBy(value):
@@ -183,6 +221,7 @@ public struct QueryCLI: Sendable {
         var explicitUntil: Date?
         var cameras: [String] = []
         var kinds: [String] = []
+        var weekdays: [QueryWeekday] = []
         var timeOfDay: QueryTimeOfDayRange?
         var order: EventOrder = .newest
         var groupBy: [SummaryGroupBy] = []
@@ -243,6 +282,18 @@ public struct QueryCLI: Sendable {
                 cameras.append(try popValue(index: &index, flag: argument))
             case "--kind":
                 kinds.append(try popValue(index: &index, flag: argument))
+            case "--day-of-week":
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = QueryWeekday(rawValue: rawValue) else {
+                    throw QueryCLIError.invalidWeekday(rawValue)
+                }
+                weekdays.append(parsed)
+            case "--weekday":
+                weekdays.append(contentsOf: QueryWeekday.weekdays)
+                index += 1
+            case "--weekend":
+                weekdays.append(contentsOf: QueryWeekday.weekend)
+                index += 1
             case "--time-of-day":
                 let rawValue = try popValue(index: &index, flag: argument)
                 guard let parsed = Self.parseTimeOfDayRange(rawValue) else {
@@ -293,6 +344,7 @@ public struct QueryCLI: Sendable {
         self.filters = QueryFilters(
             cameras: cameras,
             kinds: kinds,
+            weekdays: Self.uniqueWeekdays(weekdays),
             timeOfDay: timeOfDay
         )
         self.windowBounds = windowBounds
@@ -319,6 +371,7 @@ public struct QueryCLI: Sendable {
                 window: try windowBounds.resolve(now: now),
                 cameras: filters.cameras,
                 kinds: filters.kinds,
+                weekdays: filters.weekdays,
                 timeOfDay: filters.timeOfDay
             )
         }
@@ -331,6 +384,7 @@ public struct QueryCLI: Sendable {
                 ),
                 cameras: filters.cameras,
                 kinds: filters.kinds,
+                weekdays: filters.weekdays,
                 timeOfDay: filters.timeOfDay
             )
         }
@@ -346,8 +400,20 @@ public struct QueryCLI: Sendable {
             ),
             cameras: filters.cameras,
             kinds: filters.kinds,
+            weekdays: filters.weekdays,
             timeOfDay: filters.timeOfDay
         )
+    }
+
+    private static func uniqueWeekdays(_ weekdays: [QueryWeekday]) -> [QueryWeekday] {
+        var seen = Set<QueryWeekday>()
+        var unique: [QueryWeekday] = []
+
+        for weekday in weekdays where seen.insert(weekday).inserted {
+            unique.append(weekday)
+        }
+
+        return unique
     }
 
     private static func parseTimeOfDayRange(_ rawValue: String) -> QueryTimeOfDayRange? {
