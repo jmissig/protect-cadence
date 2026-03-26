@@ -248,10 +248,12 @@ public struct SummaryRequest: Sendable {
 public struct SummaryGroup: Codable, Sendable, Equatable {
     public let group: [String: String]
     public let rowCount: Int
+    public let distinctEventCount: Int
 
-    public init(group: [String: String], rowCount: Int) {
+    public init(group: [String: String], rowCount: Int, distinctEventCount: Int) {
         self.group = group
         self.rowCount = rowCount
+        self.distinctEventCount = distinctEventCount
     }
 }
 
@@ -448,7 +450,7 @@ public final class ProtectCadenceDatabase {
         let selectColumns = request.groupBy.map { "\($0.selectSQL) AS \($0.alias)" }.joined(separator: ", ")
         let groupColumns = request.groupBy.map(\.alias).joined(separator: ", ")
         let sql = """
-            SELECT \(selectColumns), COUNT(*) AS row_count
+            SELECT \(selectColumns), COUNT(*) AS row_count, COUNT(DISTINCT event_id) AS distinct_event_count
             FROM \(EventRow.databaseTableName)
             \(whereClause.sql)
             GROUP BY \(groupColumns)
@@ -460,7 +462,11 @@ public final class ProtectCadenceDatabase {
             for dimension in request.groupBy {
                 values[dimension.rawValue] = row[dimension.alias]
             }
-            return SummaryGroup(group: values, rowCount: row["row_count"])
+            return SummaryGroup(
+                group: values,
+                rowCount: row["row_count"],
+                distinctEventCount: row["distinct_event_count"]
+            )
         }
     }
 

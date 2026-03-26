@@ -744,9 +744,9 @@ struct ProtectCadenceCoreTests {
         #expect(summary.distinctEventCount == 3)
         #expect(
             summary.groups == [
-                SummaryGroup(group: ["camera": "Backyard", "kind": "animal"], rowCount: 1),
-                SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 2),
-                SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], rowCount: 1),
+                SummaryGroup(group: ["camera": "Backyard", "kind": "animal"], rowCount: 1, distinctEventCount: 1),
+                SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 2, distinctEventCount: 2),
+                SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], rowCount: 1, distinctEventCount: 1),
             ]
         )
     }
@@ -792,7 +792,7 @@ struct ProtectCadenceCoreTests {
 
         #expect(summary.totalRows == 1)
         #expect(summary.distinctEventCount == 1)
-        #expect(summary.groups == [SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 1)])
+        #expect(summary.groups == [SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 1, distinctEventCount: 1)])
     }
 
     @Test
@@ -836,6 +836,80 @@ struct ProtectCadenceCoreTests {
 
         #expect(summary.totalRows == 3)
         #expect(summary.distinctEventCount == 2)
+        #expect(summary.groups == [
+            SummaryGroup(group: ["camera": "Driveway", "kind": "person"], rowCount: 2, distinctEventCount: 2),
+            SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], rowCount: 1, distinctEventCount: 1),
+        ])
+    }
+
+    @Test
+    func summaryGroupedDistinctEventCountStaysStableForMultiKindEvents() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+        let calendar = Calendar(identifier: .gregorian)
+
+        func localDate(day: Int, hour: Int, minute: Int) -> Date {
+            let components = DateComponents(
+                timeZone: TimeZone(identifier: "America/Los_Angeles"),
+                year: 2026,
+                month: 3,
+                day: day,
+                hour: hour,
+                minute: minute
+            )
+            return calendar.date(from: components)!
+        }
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 5),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "event-1"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 5),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "event-1"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 25),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "event-2"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 40),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "event-3"
+                ),
+            ],
+            into: database
+        )
+
+        let summary = try database.fetchSummary(
+            SummaryRequest(
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 25, hour: 8, minute: 0),
+                        end: localDate(day: 25, hour: 9, minute: 0)
+                    )
+                ),
+                groupBy: [.date, .hour]
+            )
+        )
+
+        #expect(summary.totalRows == 4)
+        #expect(summary.distinctEventCount == 3)
+        #expect(summary.groups == [
+            SummaryGroup(
+                group: ["date": "2026-03-25", "hour": "08:00"],
+                rowCount: 4,
+                distinctEventCount: 3
+            ),
+        ])
     }
 
     @Test
@@ -898,8 +972,8 @@ struct ProtectCadenceCoreTests {
 
         #expect(summary.groupBy == [.date, .hour])
         #expect(summary.groups == [
-            SummaryGroup(group: ["date": "2026-03-24", "hour": "23:00"], rowCount: 2),
-            SummaryGroup(group: ["date": "2026-03-25", "hour": "00:00"], rowCount: 1),
+            SummaryGroup(group: ["date": "2026-03-24", "hour": "23:00"], rowCount: 2, distinctEventCount: 2),
+            SummaryGroup(group: ["date": "2026-03-25", "hour": "00:00"], rowCount: 1, distinctEventCount: 1),
         ])
     }
 
@@ -948,8 +1022,8 @@ struct ProtectCadenceCoreTests {
         #expect(summary.distinctEventCount == 2)
         #expect(summary.groupBy == [.weekday])
         #expect(summary.groups == [
-            SummaryGroup(group: ["weekday": "sat"], rowCount: 1),
-            SummaryGroup(group: ["weekday": "sun"], rowCount: 1),
+            SummaryGroup(group: ["weekday": "sat"], rowCount: 1, distinctEventCount: 1),
+            SummaryGroup(group: ["weekday": "sun"], rowCount: 1, distinctEventCount: 1),
         ])
     }
 
@@ -982,13 +1056,14 @@ struct ProtectCadenceCoreTests {
             #expect(response.totalRows == 1)
             #expect(response.distinctEventCount == 1)
             #expect(response.countSemantics == .rows)
-            #expect(response.groups == [SummaryGroup(group: ["camera": "Porch", "kind": "package"], rowCount: 1)])
+            #expect(response.groups == [SummaryGroup(group: ["camera": "Porch", "kind": "package"], rowCount: 1, distinctEventCount: 1)])
             #expect(response.filters.window == QueryWindow(start: now.addingTimeInterval(-2 * 60 * 60), end: now))
 
             let json = try JSONOutput.encode(output)
             #expect(json.contains("\"command\""))
             #expect(json.contains("\"filters\""))
             #expect(json.contains("\"distinctEventCount\""))
+            #expect(json.contains("\"rowCount\""))
         case .events:
             Issue.record("expected summary output")
         }
@@ -1640,7 +1715,7 @@ struct ProtectCadenceCoreTests {
         case let .summary(response):
             #expect(response.filters.weekdays == [.sun])
             #expect(response.totalRows == 1)
-            #expect(response.groups == [SummaryGroup(group: ["weekday": "sun"], rowCount: 1)])
+            #expect(response.groups == [SummaryGroup(group: ["weekday": "sun"], rowCount: 1, distinctEventCount: 1)])
         case .events:
             Issue.record("expected summary output")
         }

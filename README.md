@@ -104,6 +104,7 @@ Notes:
 - `--day-of-week` is repeatable and uses local weekdays: `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat`
 - `--weekday` expands to Monday through Friday
 - `--weekend` expands to Saturday and Sunday
+- `query summary` buckets include both `rowCount` and `distinctEventCount`
 - output is JSON
 
 ## Overrides
