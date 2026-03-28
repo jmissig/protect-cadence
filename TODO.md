@@ -42,8 +42,9 @@
   - Keep outputs descriptive and evidence-oriented; do not label anything normal or abnormal.
 - Keep event counts as the primary public count semantics.
 - Keep any counts derived from distinct Protect `event_id` framed as source/provenance metadata.
-- Add `compare` as a descriptive evidence-extraction tool for window-to-window or slice-to-slice comparison.
-  - It should answer questions like “this Tuesday evening vs typical Tuesday evenings” without making anomaly judgments.
+- Extend `compare` beyond the first window-to-window slice only when the next shape stays obviously descriptive.
+  - Likely next useful helpers: same weekday across prior weeks, before/after a date, or one camera vs another camera.
+  - Keep it mathematical and evidence-oriented; do not add anomaly judgments.
 - Add a drill-down path from aggregate output to representative raw events so downstream tools can inspect the evidence behind a bucket.
 - Consider a baseline/profile-style command only if it stays mathematical, legible, and clearly simpler than doing the same work in OpenClaw.
 - Explore whether session / cluster style outputs are useful for collapsing noisy repeated detections into activity episodes.

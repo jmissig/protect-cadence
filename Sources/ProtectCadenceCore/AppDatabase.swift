@@ -288,6 +288,90 @@ public struct SummaryResponse: Codable, Sendable {
     }
 }
 
+public struct CompareRequest: Sendable {
+    public let filters: QueryFilters
+    public let comparisonWindow: QueryWindow
+    public let groupBy: [SummaryGroupBy]
+
+    public init(filters: QueryFilters, comparisonWindow: QueryWindow, groupBy: [SummaryGroupBy] = [.camera, .kind]) {
+        self.filters = filters
+        self.comparisonWindow = comparisonWindow
+        self.groupBy = groupBy
+    }
+}
+
+public struct CompareCounts: Codable, Sendable, Equatable {
+    public let eventCount: Int
+    public let sourceEventCount: Int
+
+    public init(eventCount: Int, sourceEventCount: Int) {
+        self.eventCount = eventCount
+        self.sourceEventCount = sourceEventCount
+    }
+}
+
+public struct CompareGroup: Codable, Sendable, Equatable {
+    public let group: [String: String]
+    public let window: CompareCounts
+    public let comparisonWindow: CompareCounts
+    public let eventCountDelta: Int
+    public let sourceEventCountDelta: Int
+
+    public init(
+        group: [String: String],
+        window: CompareCounts,
+        comparisonWindow: CompareCounts,
+        eventCountDelta: Int,
+        sourceEventCountDelta: Int
+    ) {
+        self.group = group
+        self.window = window
+        self.comparisonWindow = comparisonWindow
+        self.eventCountDelta = eventCountDelta
+        self.sourceEventCountDelta = sourceEventCountDelta
+    }
+}
+
+public struct CompareResponse: Codable, Sendable {
+    public let command: String
+    public let databasePath: String
+    public let filters: QueryFilters
+    public let comparisonWindow: QueryWindow
+    public let countSemantics: CountSemantics
+    public let groupBy: [SummaryGroupBy]
+    public let totals: CompareCounts
+    public let comparisonTotals: CompareCounts
+    public let totalEventCountDelta: Int
+    public let totalSourceEventCountDelta: Int
+    public let groups: [CompareGroup]
+
+    public init(
+        command: String,
+        databasePath: String,
+        filters: QueryFilters,
+        comparisonWindow: QueryWindow,
+        countSemantics: CountSemantics = .events,
+        groupBy: [SummaryGroupBy],
+        totals: CompareCounts,
+        comparisonTotals: CompareCounts,
+        totalEventCountDelta: Int,
+        totalSourceEventCountDelta: Int,
+        groups: [CompareGroup]
+    ) {
+        self.command = command
+        self.databasePath = databasePath
+        self.filters = filters
+        self.comparisonWindow = comparisonWindow
+        self.countSemantics = countSemantics
+        self.groupBy = groupBy
+        self.totals = totals
+        self.comparisonTotals = comparisonTotals
+        self.totalEventCountDelta = totalEventCountDelta
+        self.totalSourceEventCountDelta = totalSourceEventCountDelta
+        self.groups = groups
+    }
+}
+
 private struct EventWhereClause {
     let sql: String
     let arguments: StatementArguments
@@ -322,6 +406,12 @@ private extension SummaryGroupBy {
                 """
         }
     }
+}
+
+private struct SummarySnapshot {
+    let totalEventCount: Int
+    let totalSourceEventCount: Int
+    let groups: [SummaryGroup]
 }
 
 public final class ProtectCadenceDatabase {
@@ -406,49 +496,75 @@ public final class ProtectCadenceDatabase {
 
     public func fetchSummary(_ request: SummaryRequest) throws -> SummaryResponse {
         try dbQueue.read { db in
-            let whereClause = try eventWhereClause(for: request.filters)
-
-            let totalEventCount = try Int.fetchOne(
-                db,
-                sql: """
-                    SELECT COUNT(*)
-                    FROM \(EventRow.databaseTableName)
-                    \(whereClause.sql)
-                    """,
-                arguments: whereClause.arguments
-            ) ?? 0
-
-            let totalSourceEventCount = try Int.fetchOne(
-                db,
-                sql: """
-                    SELECT COUNT(DISTINCT event_id)
-                    FROM \(EventRow.databaseTableName)
-                    \(whereClause.sql)
-                    """,
-                arguments: whereClause.arguments
-            ) ?? 0
-
-            let groups = try fetchSummaryGroups(db: db, request: request, whereClause: whereClause)
+            let snapshot = try fetchSummarySnapshot(
+                db: db,
+                filters: request.filters,
+                groupBy: request.groupBy
+            )
 
             return SummaryResponse(
                 command: ProtectCadenceCommand.query.rawValue,
                 databasePath: path,
                 filters: request.filters,
-                totalEventCount: totalEventCount,
-                totalSourceEventCount: totalSourceEventCount,
+                totalEventCount: snapshot.totalEventCount,
+                totalSourceEventCount: snapshot.totalSourceEventCount,
                 groupBy: request.groupBy,
-                groups: groups
+                groups: snapshot.groups
+            )
+        }
+    }
+
+    public func fetchCompare(_ request: CompareRequest) throws -> CompareResponse {
+        try dbQueue.read { db in
+            let windowSnapshot = try fetchSummarySnapshot(
+                db: db,
+                filters: request.filters,
+                groupBy: request.groupBy
+            )
+            let comparisonSnapshot = try fetchSummarySnapshot(
+                db: db,
+                filters: QueryFilters(
+                    window: request.comparisonWindow,
+                    cameras: request.filters.cameras,
+                    kinds: request.filters.kinds,
+                    weekdays: request.filters.weekdays,
+                    timeOfDay: request.filters.timeOfDay
+                ),
+                groupBy: request.groupBy
+            )
+
+            return CompareResponse(
+                command: ProtectCadenceCommand.query.rawValue,
+                databasePath: path,
+                filters: request.filters,
+                comparisonWindow: request.comparisonWindow,
+                groupBy: request.groupBy,
+                totals: CompareCounts(
+                    eventCount: windowSnapshot.totalEventCount,
+                    sourceEventCount: windowSnapshot.totalSourceEventCount
+                ),
+                comparisonTotals: CompareCounts(
+                    eventCount: comparisonSnapshot.totalEventCount,
+                    sourceEventCount: comparisonSnapshot.totalSourceEventCount
+                ),
+                totalEventCountDelta: windowSnapshot.totalEventCount - comparisonSnapshot.totalEventCount,
+                totalSourceEventCountDelta: windowSnapshot.totalSourceEventCount - comparisonSnapshot.totalSourceEventCount,
+                groups: compareGroups(
+                    windowGroups: windowSnapshot.groups,
+                    comparisonGroups: comparisonSnapshot.groups,
+                    groupBy: request.groupBy
+                )
             )
         }
     }
 
     private func fetchSummaryGroups(
         db: Database,
-        request: SummaryRequest,
+        groupBy: [SummaryGroupBy],
         whereClause: EventWhereClause
     ) throws -> [SummaryGroup] {
-        let selectColumns = request.groupBy.map { "\($0.selectSQL) AS \($0.alias)" }.joined(separator: ", ")
-        let groupColumns = request.groupBy.map(\.alias).joined(separator: ", ")
+        let selectColumns = groupBy.map { "\($0.selectSQL) AS \($0.alias)" }.joined(separator: ", ")
+        let groupColumns = groupBy.map(\.alias).joined(separator: ", ")
         let sql = """
             SELECT \(selectColumns), COUNT(*) AS event_count, COUNT(DISTINCT event_id) AS source_event_count
             FROM \(EventRow.databaseTableName)
@@ -459,7 +575,7 @@ public final class ProtectCadenceDatabase {
 
         return try Row.fetchAll(db, sql: sql, arguments: whereClause.arguments).map { row in
             var values: [String: String] = [:]
-            for dimension in request.groupBy {
+            for dimension in groupBy {
                 values[dimension.rawValue] = row[dimension.alias]
             }
             return SummaryGroup(
@@ -468,6 +584,80 @@ public final class ProtectCadenceDatabase {
                 sourceEventCount: row["source_event_count"]
             )
         }
+    }
+
+    private func fetchSummarySnapshot(
+        db: Database,
+        filters: QueryFilters,
+        groupBy: [SummaryGroupBy]
+    ) throws -> SummarySnapshot {
+        let whereClause = try eventWhereClause(for: filters)
+
+        let totalEventCount = try Int.fetchOne(
+            db,
+            sql: """
+                SELECT COUNT(*)
+                FROM \(EventRow.databaseTableName)
+                \(whereClause.sql)
+                """,
+            arguments: whereClause.arguments
+        ) ?? 0
+
+        let totalSourceEventCount = try Int.fetchOne(
+            db,
+            sql: """
+                SELECT COUNT(DISTINCT event_id)
+                FROM \(EventRow.databaseTableName)
+                \(whereClause.sql)
+                """,
+            arguments: whereClause.arguments
+        ) ?? 0
+
+        return SummarySnapshot(
+            totalEventCount: totalEventCount,
+            totalSourceEventCount: totalSourceEventCount,
+            groups: try fetchSummaryGroups(
+                db: db,
+                groupBy: groupBy,
+                whereClause: whereClause
+            )
+        )
+    }
+
+    private func compareGroups(
+        windowGroups: [SummaryGroup],
+        comparisonGroups: [SummaryGroup],
+        groupBy: [SummaryGroupBy]
+    ) -> [CompareGroup] {
+        let windowMap = Dictionary(uniqueKeysWithValues: windowGroups.map { (groupKey(for: $0.group, groupBy: groupBy), $0) })
+        let comparisonMap = Dictionary(uniqueKeysWithValues: comparisonGroups.map { (groupKey(for: $0.group, groupBy: groupBy), $0) })
+        let allKeys = Set(windowMap.keys).union(comparisonMap.keys).sorted()
+
+        return allKeys.map { key in
+            let windowGroup = windowMap[key]
+            let comparisonGroup = comparisonMap[key]
+            let group = windowGroup?.group ?? comparisonGroup?.group ?? [:]
+            let windowCounts = CompareCounts(
+                eventCount: windowGroup?.eventCount ?? 0,
+                sourceEventCount: windowGroup?.sourceEventCount ?? 0
+            )
+            let comparisonCounts = CompareCounts(
+                eventCount: comparisonGroup?.eventCount ?? 0,
+                sourceEventCount: comparisonGroup?.sourceEventCount ?? 0
+            )
+
+            return CompareGroup(
+                group: group,
+                window: windowCounts,
+                comparisonWindow: comparisonCounts,
+                eventCountDelta: windowCounts.eventCount - comparisonCounts.eventCount,
+                sourceEventCountDelta: windowCounts.sourceEventCount - comparisonCounts.sourceEventCount
+            )
+        }
+    }
+
+    private func groupKey(for group: [String: String], groupBy: [SummaryGroupBy]) -> String {
+        groupBy.map { "\($0.rawValue)=\(group[$0.rawValue] ?? "")" }.joined(separator: "\u{001F}")
     }
 
     private func eventWhereClause(for filters: QueryFilters) throws -> EventWhereClause {

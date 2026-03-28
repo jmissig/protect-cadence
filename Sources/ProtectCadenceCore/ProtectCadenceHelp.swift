@@ -17,6 +17,8 @@ public enum ProtectCadenceHelp {
             return queryEvents
         case ["query", "summary", "--help"], ["help", "query", "summary"]:
             return querySummary
+        case ["query", "compare", "--help"], ["help", "query", "compare"]:
+            return queryCompare
         default:
             return nil
         }
@@ -76,11 +78,12 @@ public enum ProtectCadenceHelp {
     """
 
     private static let query = """
-    Usage: protect-cadence query <events|summary> [options]
+    Usage: protect-cadence query <events|summary|compare> [options]
 
     Try:
       protect-cadence query events --help
       protect-cadence query summary --help
+      protect-cadence query compare --help
     """
 
     private static let queryEvents = """
@@ -125,6 +128,38 @@ public enum ProtectCadenceHelp {
       --weekend                  Include Saturday and Sunday
       --time-of-day <HH:MM-HH:MM>
                                 Local time-of-day filter, supports overnight ranges
+      --group-by <camera|kind|date|hour|weekday>
+                                Repeatable grouping, default camera + kind
+    """
+
+    private static let queryCompare = """
+    Usage: protect-cadence query compare [options]
+
+    Compare modes:
+      --vs-since <time> --vs-until <time>
+                                Explicit comparison window
+      --vs-same-window-yesterday
+                                Shift the primary window back by one local day
+
+    Primary window:
+      compare requires --last-hours <n> or --since <time> [--until <time>]
+
+    Shared filters:
+      --camera <name>            Repeatable display-name filter for both windows
+      --kind <kind>              Repeatable kind filter for both windows
+      --day-of-week <sun|mon|tue|wed|thu|fri|sat>
+                                Repeatable local weekday filter for both windows
+      --weekday                  Include Monday through Friday in both windows
+      --weekend                  Include Saturday and Sunday in both windows
+      --time-of-day <HH:MM-HH:MM>
+                                Local time-of-day filter for both windows
+
+    Options:
+      --db <path>                SQLite path override
+      --config <path>            Override config file path
+      --since <time>             Inclusive lower bound for the primary window
+      --until <time>             Exclusive upper bound, requires --since
+      --last-hours <n>           Primary window ending now
       --group-by <camera|kind|date|hour|weekday>
                                 Repeatable grouping, default camera + kind
     """

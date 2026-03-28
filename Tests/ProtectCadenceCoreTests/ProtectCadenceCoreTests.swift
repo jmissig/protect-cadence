@@ -1065,7 +1065,7 @@ struct ProtectCadenceCoreTests {
             #expect(json.contains("\"totalSourceEventCount\""))
             #expect(json.contains("\"eventCount\""))
             #expect(json.contains("\"sourceEventCount\""))
-        case .events:
+        case .events, .compare:
             Issue.record("expected summary output")
         }
     }
@@ -1100,7 +1100,7 @@ struct ProtectCadenceCoreTests {
                 #expect(response.command == "protect-cadence query")
                 #expect(response.totalEventCount == 1)
                 #expect(response.totalSourceEventCount == 1)
-            case .events:
+            case .events, .compare:
                 Issue.record("expected summary output")
             }
         case .ingest, .auth:
@@ -1352,7 +1352,7 @@ struct ProtectCadenceCoreTests {
     func bareQueryReturnsQueryHelpText() {
         let help = ProtectCadenceHelp.text(for: ["query"])
 
-        #expect(help?.contains("Usage: protect-cadence query <events|summary> [options]") == true)
+        #expect(help?.contains("Usage: protect-cadence query <events|summary|compare> [options]") == true)
     }
 
     @Test
@@ -1431,6 +1431,92 @@ struct ProtectCadenceCoreTests {
             until: QueryDateParser.parse(until)!
         ))
         #expect(summaryCLI.groupBy == [.date, .kind])
+    }
+
+    @Test
+    func queryCLIParsesCompareModes() throws {
+        let explicitCLI = try QueryCLI(arguments: [
+            "compare",
+            "--since", "2026-03-25T01:00:00Z",
+            "--until", "2026-03-25T02:00:00Z",
+            "--vs-since", "2026-03-24T01:00:00Z",
+            "--vs-until", "2026-03-24T02:00:00Z",
+            "--camera", "Driveway",
+            "--kind", "person",
+            "--group-by", "hour",
+        ])
+        let helperCLI = try QueryCLI(arguments: [
+            "compare",
+            "--last-hours", "1",
+            "--vs-same-window-yesterday",
+        ])
+
+        #expect(explicitCLI.windowBounds == QueryWindowBounds(
+            since: QueryDateParser.parse("2026-03-25T01:00:00Z")!,
+            until: QueryDateParser.parse("2026-03-25T02:00:00Z")!
+        ))
+        #expect(explicitCLI.comparisonWindowBounds == QueryWindowBounds(
+            since: QueryDateParser.parse("2026-03-24T01:00:00Z")!,
+            until: QueryDateParser.parse("2026-03-24T02:00:00Z")!
+        ))
+        #expect(explicitCLI.comparisonUsesSameWindowYesterday == false)
+        #expect(explicitCLI.filters.cameras == ["Driveway"])
+        #expect(explicitCLI.filters.kinds == ["person"])
+        #expect(explicitCLI.groupBy == [.hour])
+
+        #expect(helperCLI.comparisonWindowBounds == nil)
+        #expect(helperCLI.comparisonUsesSameWindowYesterday == true)
+    }
+
+    @Test
+    func queryCLIRejectsCompareWithoutMode() throws {
+        do {
+            let cli = try QueryCLI(arguments: [
+                "compare",
+                "--last-hours", "1",
+            ])
+            _ = try cli.compareRequest(now: Date(timeIntervalSince1970: 0))
+            Issue.record("expected missing compare mode error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "compare requires either --vs-since/--vs-until or --vs-same-window-yesterday")
+        }
+    }
+
+    @Test
+    func queryCLIRejectsCompareWithoutPrimaryWindow() throws {
+        do {
+            let cli = try QueryCLI(arguments: [
+                "compare",
+                "--vs-same-window-yesterday",
+            ])
+            _ = try cli.compareRequest(now: Date(timeIntervalSince1970: 0))
+            Issue.record("expected missing primary window error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "compare requires a primary window via --last-hours or --since/--until")
+        }
+    }
+
+    @Test
+    func queryCLIResolvesCompareHelperUsingPrimaryWindowShiftedBackOneDay() throws {
+        try withDefaultTimeZone("America/Los_Angeles") {
+            let cli = try QueryCLI(arguments: [
+                "compare",
+                "--since", "2026-03-27 08:00",
+                "--until", "2026-03-27 09:30",
+                "--vs-same-window-yesterday",
+            ])
+
+            let request = try cli.compareRequest(now: Date(timeIntervalSince1970: 0))
+
+            #expect(request.filters.window == QueryWindow(
+                start: localDate(day: 27, hour: 8, minute: 0),
+                end: localDate(day: 27, hour: 9, minute: 30)
+            ))
+            #expect(request.comparisonWindow == QueryWindow(
+                start: localDate(day: 26, hour: 8, minute: 0),
+                end: localDate(day: 26, hour: 9, minute: 30)
+            ))
+        }
     }
 
     @Test
@@ -1570,7 +1656,7 @@ struct ProtectCadenceCoreTests {
             #expect(response.databasePath == databasePath)
             #expect(response.events.map(\.eventID) == ["event-2"])
             #expect(response.countSemantics == .events)
-        case .summary:
+        case .summary, .compare:
             Issue.record("expected events output")
         }
     }
@@ -1605,7 +1691,7 @@ struct ProtectCadenceCoreTests {
         switch output {
         case let .events(response):
             #expect(response.events.map(\.eventID) == ["event-2"])
-        case .summary:
+        case .summary, .compare:
             Issue.record("expected events output")
         }
     }
@@ -1643,7 +1729,7 @@ struct ProtectCadenceCoreTests {
         case let .events(response):
             #expect(response.filters.window == QueryWindow(start: now.addingTimeInterval(-24 * 60 * 60), end: now))
             #expect(response.events.map(\.eventID) == ["recent-event"])
-        case .summary:
+        case .summary, .compare:
             Issue.record("expected events output")
         }
     }
@@ -1685,7 +1771,7 @@ struct ProtectCadenceCoreTests {
         case let .events(response):
             #expect(response.filters.window == QueryWindow(start: now.addingTimeInterval(-60 * 60), end: now))
             #expect(response.events.map(\.eventID) == ["recent-event"])
-        case .summary:
+        case .summary, .compare:
             Issue.record("expected events output")
         }
     }
@@ -1744,7 +1830,7 @@ struct ProtectCadenceCoreTests {
         case let .events(response):
             #expect(response.filters.weekdays == [.sun, .sat])
             #expect(response.events.map(\.eventID) == ["sat-event", "sun-event"])
-        case .summary:
+        case .summary, .compare:
             Issue.record("expected events output")
         }
 
@@ -1753,8 +1839,108 @@ struct ProtectCadenceCoreTests {
             #expect(response.filters.weekdays == [.sun])
             #expect(response.totalEventCount == 1)
             #expect(response.groups == [SummaryGroup(group: ["weekday": "sun"], eventCount: 1, sourceEventCount: 1)])
-        case .events:
+        case .events, .compare:
             Issue.record("expected summary output")
+        }
+    }
+
+    @Test
+    func queryRunnerCompareProducesWindowToWindowCountsAndDeltas() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 27, hour: 8, minute: 5),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "window-driveway-person-1"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 27, hour: 8, minute: 15),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "window-driveway-person-2"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 27, hour: 8, minute: 20),
+                    camera: "Porch",
+                    kind: "package",
+                    eventID: "window-porch-package"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 26, hour: 8, minute: 10),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "comparison-driveway-person"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 26, hour: 8, minute: 25),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "comparison-driveway-vehicle"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try ProtectCadenceQueryRunner.run(
+            arguments: [
+                "compare",
+                "--db", databasePath,
+                "--since", "2026-03-27 08:00",
+                "--until", "2026-03-27 09:00",
+                "--vs-since", "2026-03-26 08:00",
+                "--vs-until", "2026-03-26 09:00",
+            ]
+        )
+
+        switch output {
+        case let .compare(response):
+            #expect(response.filters.window == QueryWindow(
+                start: localDate(day: 27, hour: 8, minute: 0),
+                end: localDate(day: 27, hour: 9, minute: 0)
+            ))
+            #expect(response.comparisonWindow == QueryWindow(
+                start: localDate(day: 26, hour: 8, minute: 0),
+                end: localDate(day: 26, hour: 9, minute: 0)
+            ))
+            #expect(response.groupBy == [.camera, .kind])
+            #expect(response.totals == CompareCounts(eventCount: 3, sourceEventCount: 3))
+            #expect(response.comparisonTotals == CompareCounts(eventCount: 2, sourceEventCount: 2))
+            #expect(response.totalEventCountDelta == 1)
+            #expect(response.totalSourceEventCountDelta == 1)
+            #expect(response.groups == [
+                CompareGroup(
+                    group: ["camera": "Driveway", "kind": "person"],
+                    window: CompareCounts(eventCount: 2, sourceEventCount: 2),
+                    comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                    eventCountDelta: 1,
+                    sourceEventCountDelta: 1
+                ),
+                CompareGroup(
+                    group: ["camera": "Driveway", "kind": "vehicle"],
+                    window: CompareCounts(eventCount: 0, sourceEventCount: 0),
+                    comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                    eventCountDelta: -1,
+                    sourceEventCountDelta: -1
+                ),
+                CompareGroup(
+                    group: ["camera": "Porch", "kind": "package"],
+                    window: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                    comparisonWindow: CompareCounts(eventCount: 0, sourceEventCount: 0),
+                    eventCountDelta: 1,
+                    sourceEventCountDelta: 1
+                ),
+            ])
+
+            let json = try JSONOutput.encode(output)
+            #expect(json.contains("\"comparisonWindow\""))
+            #expect(json.contains("\"eventCountDelta\""))
+            #expect(json.contains("\"comparisonTotals\""))
+        case .events, .summary:
+            Issue.record("expected compare output")
         }
     }
 

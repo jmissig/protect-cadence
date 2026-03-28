@@ -5,7 +5,7 @@
 It is built around two normal tasks:
 
 - ingest recent Protect events into SQLite
-- query events or a short grouped summary
+- query events, grouped summaries, or window-to-window comparisons
 
 ## Install
 
@@ -92,12 +92,18 @@ protect-cadence query summary --last-hours 24
 protect-cadence query summary --since 2026-03-25T00:00:00Z --until 2026-03-26T00:00:00Z --group-by date
 protect-cadence query summary --group-by date --group-by kind
 protect-cadence query summary --weekday --group-by weekday --group-by hour
+
+protect-cadence query compare --last-hours 1 --vs-same-window-yesterday
+protect-cadence query compare --since 2026-03-27 08:00 --until 2026-03-27 09:00 --vs-since 2026-03-26 08:00 --vs-until 2026-03-26 09:00
+protect-cadence query compare --since 2026-03-27T00:00:00Z --until 2026-03-28T00:00:00Z --vs-same-window-yesterday --group-by date --group-by kind
 ```
 
 Notes:
 
 - `query events` defaults to `--limit 50`
 - `query summary` defaults to the last `24` hours
+- `query compare` requires a primary window via `--last-hours` or `--since`/`--until`
+- `query compare` supports either an explicit comparison window via `--vs-since` + `--vs-until` or a `--vs-same-window-yesterday` helper
 - `--since` and `--until` are the public explicit bounds
 - `--since` alone resolves to a window ending at `now`
 - `--until` requires `--since`
@@ -106,6 +112,7 @@ Notes:
 - `--weekend` expands to Saturday and Sunday
 - counts treat each normalized cadence event as one event
 - `query summary` includes `eventCount` plus `sourceEventCount` provenance based on distinct Protect `event_id`
+- `query compare` reports those same counts for both windows plus simple deltas
 - output is JSON
 
 ## Overrides

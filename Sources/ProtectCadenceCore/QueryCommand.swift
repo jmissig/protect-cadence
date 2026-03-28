@@ -3,6 +3,7 @@ import Foundation
 public enum QuerySubcommand: String, Sendable {
     case events
     case summary
+    case compare
 }
 
 public enum EventOrder: String, Codable, Sendable {
@@ -131,6 +132,22 @@ public struct QueryWindowBounds: Sendable, Equatable {
     }
 }
 
+private extension QueryWindow {
+    static func shiftedByLocalDays(
+        _ window: QueryWindow,
+        days: Int,
+        calendar: Calendar = .current
+    ) throws -> QueryWindow {
+        guard let shiftedStart = calendar.date(byAdding: .day, value: days, to: window.start),
+              let shiftedEnd = calendar.date(byAdding: .day, value: days, to: window.end)
+        else {
+            throw QueryCLIError.invalidWindowRange(start: window.start, end: window.end)
+        }
+
+        return QueryWindow(start: shiftedStart, end: shiftedEnd)
+    }
+}
+
 public enum QueryCLIError: Error, CustomStringConvertible {
     case missingSubcommand
     case unknownSubcommand(String)
@@ -144,13 +161,17 @@ public enum QueryCLIError: Error, CustomStringConvertible {
     case invalidOrder(String)
     case invalidGroupBy(String)
     case conflictingWindowFlags
+    case conflictingComparisonWindowFlags
     case untilRequiresSince
+    case compareRequiresPrimaryWindow
+    case compareRequiresExplicitWindow
+    case compareMissingMode
     case invalidWindowRange(start: Date, end: Date)
 
     public var description: String {
         switch self {
         case .missingSubcommand:
-            return "expected a subcommand such as 'events' or 'summary'"
+            return "expected a subcommand such as 'events', 'summary', or 'compare'"
         case let .unknownSubcommand(command):
             return "unknown subcommand '\(command)'"
         case let .unexpectedArgument(argument):
@@ -173,8 +194,16 @@ public enum QueryCLIError: Error, CustomStringConvertible {
             return "invalid value '\(value)' for --group-by"
         case .conflictingWindowFlags:
             return "use either --last-hours or --since/--until, not both"
+        case .conflictingComparisonWindowFlags:
+            return "use either --vs-since/--vs-until or --vs-same-window-yesterday, not both"
         case .untilRequiresSince:
             return "--until requires --since"
+        case .compareRequiresPrimaryWindow:
+            return "compare requires a primary window via --last-hours or --since/--until"
+        case .compareRequiresExplicitWindow:
+            return "--vs-since requires --vs-until, and --vs-until requires --vs-since"
+        case .compareMissingMode:
+            return "compare requires either --vs-since/--vs-until or --vs-same-window-yesterday"
         case let .invalidWindowRange(start, end):
             return "resolved time window must have start earlier than end, got \(QueryDateParser.encode(start)) to \(QueryDateParser.encode(end))"
         }
@@ -330,6 +359,8 @@ enum QueryDateParser {
 }
 
 public struct QueryCLI: Sendable {
+    public let comparisonWindowBounds: QueryWindowBounds?
+    public let comparisonUsesSameWindowYesterday: Bool
     public let databasePathOverride: String?
     public let configPath: String
     public let subcommand: QuerySubcommand
@@ -348,6 +379,9 @@ public struct QueryCLI: Sendable {
         var lastHours: Int?
         var explicitSince: Date?
         var explicitUntil: Date?
+        var comparisonSince: Date?
+        var comparisonUntil: Date?
+        var comparisonUsesSameWindowYesterday = false
         var cameras: [String] = []
         var kinds: [String] = []
         var weekdays: [QueryWeekday] = []
@@ -407,6 +441,21 @@ public struct QueryCLI: Sendable {
                     throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
                 }
                 explicitUntil = parsed
+            case "--vs-since" where subcommand == .compare:
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = QueryDateParser.parse(rawValue) else {
+                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
+                }
+                comparisonSince = parsed
+            case "--vs-until" where subcommand == .compare:
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = QueryDateParser.parse(rawValue) else {
+                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
+                }
+                comparisonUntil = parsed
+            case "--vs-same-window-yesterday" where subcommand == .compare:
+                comparisonUsesSameWindowYesterday = true
+                index += 1
             case "--camera":
                 cameras.append(try popValue(index: &index, flag: argument))
             case "--kind":
@@ -454,6 +503,14 @@ public struct QueryCLI: Sendable {
             throw QueryCLIError.untilRequiresSince
         }
 
+        if comparisonUsesSameWindowYesterday, comparisonSince != nil || comparisonUntil != nil {
+            throw QueryCLIError.conflictingComparisonWindowFlags
+        }
+
+        if (comparisonSince == nil) != (comparisonUntil == nil) {
+            throw QueryCLIError.compareRequiresExplicitWindow
+        }
+
         let windowBounds: QueryWindowBounds?
         if explicitSince != nil || explicitUntil != nil {
             let bounds = QueryWindowBounds(since: explicitSince, until: explicitUntil)
@@ -467,6 +524,18 @@ public struct QueryCLI: Sendable {
             windowBounds = nil
         }
 
+        let comparisonWindowBounds: QueryWindowBounds?
+        if let comparisonSince, let comparisonUntil {
+            guard comparisonSince < comparisonUntil else {
+                throw QueryCLIError.invalidWindowRange(start: comparisonSince, end: comparisonUntil)
+            }
+            comparisonWindowBounds = QueryWindowBounds(since: comparisonSince, until: comparisonUntil)
+        } else {
+            comparisonWindowBounds = nil
+        }
+
+        self.comparisonWindowBounds = comparisonWindowBounds
+        self.comparisonUsesSameWindowYesterday = comparisonUsesSameWindowYesterday
         self.databasePathOverride = databasePathOverride
         self.configPath = configPath
         self.subcommand = subcommand
@@ -490,6 +559,35 @@ public struct QueryCLI: Sendable {
     public func summaryRequest(now: Date = Date()) throws -> SummaryRequest {
         SummaryRequest(
             filters: try resolvedFilters(now: now, defaultLastHours: 24),
+            groupBy: groupBy.isEmpty ? [.camera, .kind] : groupBy
+        )
+    }
+
+    public func compareRequest(now: Date = Date()) throws -> CompareRequest {
+        guard windowBounds != nil || lastHours != nil else {
+            throw QueryCLIError.compareRequiresPrimaryWindow
+        }
+
+        let filters = try resolvedFilters(now: now)
+        guard let primaryWindow = filters.window else {
+            throw QueryCLIError.compareRequiresPrimaryWindow
+        }
+
+        let comparisonWindow: QueryWindow
+        if let comparisonWindowBounds {
+            comparisonWindow = try comparisonWindowBounds.resolve(now: now)
+        } else if comparisonUsesSameWindowYesterday {
+            comparisonWindow = try QueryWindow.shiftedByLocalDays(
+                primaryWindow,
+                days: -1
+            )
+        } else {
+            throw QueryCLIError.compareMissingMode
+        }
+
+        return CompareRequest(
+            filters: filters,
+            comparisonWindow: comparisonWindow,
             groupBy: groupBy.isEmpty ? [.camera, .kind] : groupBy
         )
     }
@@ -580,12 +678,15 @@ public struct QueryCLI: Sendable {
 public enum QueryCommandOutput: Encodable, Sendable {
     case events(EventsResponse)
     case summary(SummaryResponse)
+    case compare(CompareResponse)
 
     public func encode(to encoder: Encoder) throws {
         switch self {
         case let .events(response):
             try response.encode(to: encoder)
         case let .summary(response):
+            try response.encode(to: encoder)
+        case let .compare(response):
             try response.encode(to: encoder)
         }
     }
@@ -608,6 +709,8 @@ public enum ProtectCadenceQueryRunner {
             return .events(try database.fetchEventsResponse(try cli.eventsRequest(now: now)))
         case .summary:
             return .summary(try database.fetchSummary(try cli.summaryRequest(now: now)))
+        case .compare:
+            return .compare(try database.fetchCompare(try cli.compareRequest(now: now)))
         }
     }
 }
