@@ -32,23 +32,25 @@ Follow-up later if useful:
 
 ### Query surface
 
+Completed recently:
+- shared query-bound parsing now accepts `--since` / `--until` in both ISO 8601 and simple host-local deterministic forms
+- recurring human-time filters now include repeatable `--day-of-week` plus `--weekday` and `--weekend`
+- the first `compare` slice now exists for window-to-window descriptive comparisons
+- public count semantics now keep normalized event rows as the primary counts, with distinct source-event counts framed separately
+
+Still open:
 - Add a shared filter grammar across query commands.
 - Decide whether `recent` should stay as a narrow convenience command or evolve into canonical `events` plus a compatibility alias.
-- Add explicit time window controls beyond `--last-hours`, likely `--since` and `--until`.
 - Add extraction-oriented filters for `kind` and `camera`.
 - Add native time-of-day filtering, including overnight ranges such as `22:00-05:00`.
 - Add a query shape for “all matching events in this time window and these hours of day”.
-- Add recurring human-time filters that help downstream pattern reading without interpretation:
-  - `--weekday` / `--weekend`
-  - named periods such as `dawn`, `day`, `dusk`, `night` if they can be defined clearly
-  - later, only if useful, business-hours / overnight style presets
+- Consider named periods such as `dawn`, `day`, `dusk`, `night` if they can be defined clearly.
+- Later, only if useful, add business-hours / overnight style presets.
 - Add grouped summary bucketing beyond camera+kind only when there is a clear question behind it.
 - Likely useful buckets: `date`, `hour-of-day`, and `day-of-week`.
 - Add distribution-oriented summaries so downstream tools can learn rhythms rather than just totals.
   - Examples: counts by hour-of-day, day-of-week, and camera within a window.
   - Keep outputs descriptive and evidence-oriented; do not label anything normal or abnormal.
-- Keep event counts as the primary public count semantics.
-- Keep any counts derived from distinct Protect `event_id` framed as source/provenance metadata.
 - Extend `compare` beyond the first window-to-window slice only when the next shape stays obviously descriptive.
   - Likely next useful helpers: same weekday across prior weeks, before/after a date, or one camera vs another camera.
   - Keep it mathematical and evidence-oriented; do not add anomaly judgments.
@@ -93,6 +95,7 @@ These are not requests for embedded anomaly scoring. They are requests for query
 
 ### CLI / operator surface follow-up
 
+- Fix the current UX bug where bare `protect-cadence validate` falls through to help text instead of executing, while flag-bearing forms like `protect-cadence validate --last-hours 6` do run.
 - Revisit whether `validate` should remain a first-class public subcommand long-term or move behind a more operator-facing / maintenance-oriented surface once the validation workflow stabilizes.
 
 ## Current State
