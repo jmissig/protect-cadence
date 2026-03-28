@@ -11,6 +11,8 @@ public enum ProtectCadenceHelp {
             return ingest
         case ["auth", "--help"], ["help", "auth"]:
             return auth
+        case ["validate"], ["validate", "--help"], ["help", "validate"]:
+            return validate
         case ["query"], ["query", "--help"], ["help", "query"]:
             return query
         case ["query", "events", "--help"], ["help", "query", "events"]:
@@ -31,10 +33,12 @@ public enum ProtectCadenceHelp {
       ingest   Initialize or ingest Protect events
       query    Read events or grouped summaries from SQLite
       auth     Manage saved Protect controller auth
+      validate Fetch a recent controller sample and summarize ingest assumptions
 
     Try:
       protect-cadence ingest --help
       protect-cadence auth --help
+      protect-cadence validate --help
       protect-cadence query --help
     """
 
@@ -75,6 +79,26 @@ public enum ProtectCadenceHelp {
       --password <value>         Login override
       --allow-insecure-tls       Save insecure TLS as true without prompting
       --force                    Skip confirmation for clear
+    """
+
+    private static let validate = """
+    Usage: protect-cadence validate [options]
+
+    Fetch a bounded recent sample from a live Protect controller and summarize:
+      - whether timeStart still looks like detectedAt ?? start
+      - whether settled-event filtering by end != nil still matches recent events
+      - whether normalized settled rows still look sane under event_id + kind dedupe
+
+    Options:
+      --last-hours <n>           Recent sample window ending now, default 6
+      --sample-limit <n>         Example rows to include per section, default 10
+      --config <path>            Override config file path
+      --controller-url <url>     Live controller override
+      --username <value>         Live controller override
+      --password <value>         Live controller override
+      --allow-insecure-tls       Disable TLS certificate verification
+      --write-api-snapshot-dir <dir>
+                                Save a sanitized snapshot of the fetched sample
     """
 
     private static let query = """

@@ -5,6 +5,7 @@ public enum ProtectCadenceCommand: String, Sendable {
     case ingest = "protect-cadence ingest"
     case query = "protect-cadence query"
     case auth = "protect-cadence auth"
+    case validate = "protect-cadence validate"
 }
 
 public struct ProtectCadencePaths: Sendable {

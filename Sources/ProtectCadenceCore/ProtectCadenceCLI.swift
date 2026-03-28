@@ -4,6 +4,7 @@ public enum ProtectCadenceSubcommand: String, Sendable {
     case ingest
     case query
     case auth
+    case validate
 }
 
 public enum ProtectCadenceCLIError: Error, CustomStringConvertible {
@@ -14,7 +15,7 @@ public enum ProtectCadenceCLIError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case .missingSubcommand:
-            return "expected a subcommand such as 'ingest', 'query', or 'auth'"
+            return "expected a subcommand such as 'ingest', 'query', 'auth', or 'validate'"
         case let .unknownSubcommand(command):
             return "unknown subcommand '\(command)'"
         case let .unexpectedArgument(argument):
@@ -64,6 +65,7 @@ public enum ProtectCadenceCLIOutput: Encodable, Sendable {
     case ingest(IngestResponse)
     case query(QueryCommandOutput)
     case auth(AuthCommandResponse)
+    case validate(ProtectControllerValidationResponse)
 
     public func encode(to encoder: Encoder) throws {
         switch self {
@@ -72,6 +74,8 @@ public enum ProtectCadenceCLIOutput: Encodable, Sendable {
         case let .query(response):
             try response.encode(to: encoder)
         case let .auth(response):
+            try response.encode(to: encoder)
+        case let .validate(response):
             try response.encode(to: encoder)
         }
     }
@@ -298,6 +302,14 @@ public enum ProtectCadenceCLIRunner {
             return .auth(
                 try ProtectCadenceAuthRunner.run(
                     arguments: remainingArguments,
+                    environment: environment
+                )
+            )
+        case .validate:
+            return .validate(
+                try await ProtectCadenceValidateRunner.run(
+                    arguments: remainingArguments,
+                    now: now,
                     environment: environment
                 )
             )

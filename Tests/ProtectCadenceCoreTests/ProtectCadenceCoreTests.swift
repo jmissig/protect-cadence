@@ -116,6 +116,127 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func validateCLIUsesDefaultsAndParsesOverrides() throws {
+        let cli = try ValidateCLI(arguments: [
+            "--last-hours", "12",
+            "--sample-limit", "5",
+            "--config", "/tmp/protect-config.json",
+            "--controller-url", "https://protect.example",
+            "--username", "local-user",
+            "--password", "local-pass",
+            "--allow-insecure-tls",
+            "--write-api-snapshot-dir", "/tmp/sample",
+        ])
+
+        #expect(cli.lastHours == 12)
+        #expect(cli.sampleLimit == 5)
+        #expect(cli.configPath == "/tmp/protect-config.json")
+        #expect(cli.controllerURL == "https://protect.example")
+        #expect(cli.username == "local-user")
+        #expect(cli.password == "local-pass")
+        #expect(cli.allowInsecureTLS == true)
+        #expect(cli.snapshotDirectoryPath == "/tmp/sample")
+    }
+
+    @Test
+    func validationReportSummarizesRecentControllerAssumptions() {
+        let window = QueryWindow(
+            start: Date(timeIntervalSince1970: 2_000),
+            end: Date(timeIntervalSince1970: 2_600)
+        )
+        let cameras = [
+            ProtectCameraRecord(id: "camera-1", displayName: "Front", name: "Front"),
+        ]
+        let events = [
+            ProtectEventPayload(
+                id: "event-a",
+                type: "smartDetectZone",
+                start: Date(timeIntervalSince1970: 2_100),
+                end: Date(timeIntervalSince1970: 2_120),
+                detectedAt: Date(timeIntervalSince1970: 2_105),
+                smartDetectTypes: ["person", "vehicle"],
+                cameraReferenceID: "camera-1"
+            ),
+            ProtectEventPayload(
+                eventID: "event-b",
+                type: "package",
+                start: Date(timeIntervalSince1970: 2_130),
+                end: Date(timeIntervalSince1970: 2_131),
+                cameraReferenceID: "camera-1"
+            ),
+            ProtectEventPayload(
+                eventID: "dup-1",
+                type: "smartDetectZone",
+                start: Date(timeIntervalSince1970: 2_140),
+                end: Date(timeIntervalSince1970: 2_150),
+                detectedAt: Date(timeIntervalSince1970: 2_141),
+                smartDetectTypes: ["person"],
+                cameraReferenceID: "camera-1"
+            ),
+            ProtectEventPayload(
+                eventID: "dup-1",
+                type: "smartDetectLine",
+                start: Date(timeIntervalSince1970: 2_142),
+                end: Date(timeIntervalSince1970: 2_151),
+                detectedAt: Date(timeIntervalSince1970: 2_143),
+                smartDetectTypes: ["person"],
+                cameraReferenceID: "camera-1"
+            ),
+            ProtectEventPayload(
+                id: "event-open",
+                type: "smartDetectZone",
+                start: Date(timeIntervalSince1970: 2_160),
+                detectedAt: Date(timeIntervalSince1970: 2_161),
+                smartDetectTypes: ["person"],
+                cameraReferenceID: "camera-1"
+            ),
+            ProtectEventPayload(
+                type: "smartDetectZone",
+                start: Date(timeIntervalSince1970: 2_170),
+                end: Date(timeIntervalSince1970: 2_171),
+                detectedAt: Date(timeIntervalSince1970: 2_170),
+                smartDetectTypes: ["animal"],
+                cameraReferenceID: "camera-1"
+            ),
+        ]
+
+        let report = ProtectControllerValidationReportBuilder.make(
+            events: events,
+            cameras: cameras,
+            window: window,
+            sampleLimit: 3
+        )
+
+        #expect(report.command == "protect-cadence validate")
+        #expect(report.fetchedSourceEventCount == 6)
+        #expect(report.cameraLookupCount == 1)
+        #expect(report.recentEvents.count == 3)
+        #expect(report.timeStartRule.fetched.eventCount == 6)
+        #expect(report.timeStartRule.fetched.detectedAtChosenCount == 5)
+        #expect(report.timeStartRule.fetched.startFallbackCount == 1)
+        #expect(report.timeStartRule.fetched.missingTimeStartCount == 0)
+        #expect(report.timeStartRule.fetched.detectedAtDiffersFromStartCount == 4)
+        #expect(report.timeStartRule.settled.eventCount == 5)
+        #expect(report.settledEventFiltering.settledCount == 5)
+        #expect(report.settledEventFiltering.unsettledCount == 1)
+        #expect(report.dedupeKey.normalizedSettledEventCount == 5)
+        #expect(report.dedupeKey.ignoredSettledSourceEventCount == 1)
+        #expect(report.dedupeKey.eventIDCount == 3)
+        #expect(report.dedupeKey.idFallbackCount == 1)
+        #expect(report.dedupeKey.missingSourceEventIDCount == 1)
+        #expect(report.dedupeKey.uniqueEventKindKeyCount == 4)
+        #expect(report.dedupeKey.duplicateRowCount == 1)
+        #expect(report.dedupeKey.multiKindSettledSourceEventCount == 1)
+        #expect(report.dedupeKey.duplicateKeys.count == 1)
+        #expect(report.dedupeKey.duplicateKeys[0].sourceEventID == "dup-1")
+        #expect(report.dedupeKey.duplicateKeys[0].kind == "person")
+        #expect(report.dedupeKey.duplicateKeys[0].occurrenceCount == 2)
+        #expect(report.dedupeKey.multiKindExamples.count == 1)
+        #expect(report.dedupeKey.multiKindExamples[0].sourceEventID == "event-a")
+        #expect(report.snapshot == nil)
+    }
+
+    @Test
     func controllerConfigurationReadsOptInInsecureTLSFlag() throws {
         let configuration = try ProtectControllerConfiguration.fromEnvironment(
             [
@@ -1103,7 +1224,7 @@ struct ProtectCadenceCoreTests {
             case .events, .compare:
                 Issue.record("expected summary output")
             }
-        case .ingest, .auth:
+        case .ingest, .auth, .validate:
             Issue.record("expected query output")
         }
     }
@@ -1126,7 +1247,7 @@ struct ProtectCadenceCoreTests {
             #expect(response.fetchedSourceEventCount == 5)
             #expect(response.normalizedEventCount == 5)
             #expect(response.insertedEventCount == 5)
-        case .query, .auth:
+        case .query, .auth, .validate:
             Issue.record("expected ingest output")
         }
     }
@@ -1156,7 +1277,7 @@ struct ProtectCadenceCoreTests {
             #expect(response.command == "protect-cadence auth")
             #expect(response.action == "status")
             #expect(response.status == "ok")
-        case .ingest, .query:
+        case .ingest, .query, .validate:
             Issue.record("expected auth output")
         }
     }

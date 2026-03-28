@@ -137,11 +137,29 @@ protect-cadence auth login
 protect-cadence auth clear
 ```
 
+To validate live ingest assumptions against a current controller sample without writing to SQLite:
+
+```bash
+protect-cadence validate
+protect-cadence validate --last-hours 12 --sample-limit 20
+protect-cadence validate --last-hours 6 --write-api-snapshot-dir /tmp/protect-sample
+```
+
+`validate` reuses the same saved auth and override flags as live ingest, fetches a bounded recent sample, and returns JSON covering:
+
+- whether `timeStart = detectedAt ?? start` still matches recent event shapes
+- how many recent events are settled under `end != nil`
+- whether normalized settled rows collide under the current `source event id + kind` dedupe key
+- compact example rows for manual inspection
+
+If `--write-api-snapshot-dir` is provided, the fetched sample is also written through the existing sanitizer/snapshot helper.
+
 For full command help:
 
 ```bash
 protect-cadence --help
 protect-cadence ingest --help
+protect-cadence validate --help
 protect-cadence query --help
 protect-cadence auth --help
 ```

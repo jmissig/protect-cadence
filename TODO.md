@@ -84,6 +84,10 @@ These are not requests for embedded anomaly scoring. They are requests for query
 - Add migration tests for upgrading from older local schemas.
 - Add one end-to-end CLI smoke test for `protect-cadence-ingest --last-hours` with stubbed transport if the current runner shape stays stable.
 
+### CLI / operator surface follow-up
+
+- Revisit whether `validate` should remain a first-class public subcommand long-term or move behind a more operator-facing / maintenance-oriented surface once the validation workflow stabilizes.
+
 ## Current State
 
 - SQLite database and migrations exist.
