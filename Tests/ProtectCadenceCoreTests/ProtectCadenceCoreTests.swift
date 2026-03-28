@@ -1434,6 +1434,42 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func queryDateParserAcceptsLocalDateAndTimeForms() throws {
+        let timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+
+        #expect(QueryDateParser.parse("2026-03-27", timeZone: timeZone) == localDate(day: 27, hour: 0, minute: 0))
+        #expect(QueryDateParser.parse("2026-03-27 14:05", timeZone: timeZone) == localDate(day: 27, hour: 14, minute: 5))
+        #expect(QueryDateParser.parse("2026-03-27T14:05", timeZone: timeZone) == localDate(day: 27, hour: 14, minute: 5))
+        #expect(QueryDateParser.parse("2026-03-27 14:05:09", timeZone: timeZone) == localDate(day: 27, hour: 14, minute: 5, second: 9))
+    }
+
+    @Test
+    func queryDateParserRejectsInvalidLocalForms() throws {
+        let timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+
+        #expect(QueryDateParser.parse("2026-03-27 7:05", timeZone: timeZone) == nil)
+        #expect(QueryDateParser.parse("2026-02-30", timeZone: timeZone) == nil)
+    }
+
+    @Test
+    func queryCLIResolvesLocalDateOnlyBoundsAtHostLocalMidnight() throws {
+        try withDefaultTimeZone("America/Los_Angeles") {
+            let cli = try QueryCLI(arguments: [
+                "events",
+                "--since", "2026-03-27",
+                "--until", "2026-03-28",
+            ])
+
+            let request = try cli.eventsRequest(now: Date(timeIntervalSince1970: 0))
+
+            #expect(request.filters.window == QueryWindow(
+                start: localDate(day: 27, hour: 0, minute: 0),
+                end: localDate(day: 28, hour: 0, minute: 0)
+            ))
+        }
+    }
+
+    @Test
     func queryCLIRejectsInvalidDayOfWeek() throws {
         do {
             _ = try QueryCLI(arguments: [
@@ -1736,6 +1772,19 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func queryCLIRejectsInvalidTimeBoundWithFormatGuidance() throws {
+        do {
+            _ = try QueryCLI(arguments: [
+                "events",
+                "--since", "yesterday afternoon",
+            ])
+            Issue.record("expected invalid time bound error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "invalid time value 'yesterday afternoon' for --since, expected ISO 8601 with Z or explicit offset, or local YYYY-MM-DD[ T]HH:MM[:SS]")
+        }
+    }
+
+    @Test
     func queryRunnerRecentJSONIncludesCameraIDAndEventType() throws {
         let databasePath = temporaryDatabasePath()
         let database = try ProtectCadenceDatabase(path: databasePath)
@@ -1976,6 +2025,7 @@ struct ProtectCadenceCoreTests {
         day: Int,
         hour: Int,
         minute: Int,
+        second: Int = 0,
         timeZoneID: String = "America/Los_Angeles"
     ) -> Date {
         var calendar = Calendar(identifier: .gregorian)
@@ -1986,7 +2036,8 @@ struct ProtectCadenceCoreTests {
             month: month,
             day: day,
             hour: hour,
-            minute: minute
+            minute: minute,
+            second: second
         ))!
     }
 
@@ -1994,6 +2045,15 @@ struct ProtectCadenceCoreTests {
         let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         return directoryURL.path
+    }
+
+    private func withDefaultTimeZone<T>(_ timeZoneID: String, operation: () throws -> T) throws -> T {
+        let original = NSTimeZone.default
+        NSTimeZone.default = try #require(TimeZone(identifier: timeZoneID))
+        defer {
+            NSTimeZone.default = original
+        }
+        return try operation()
     }
 
     private func fixtureData(_ name: String, fixtureSet: String = "ProtectAPI") throws -> Data {

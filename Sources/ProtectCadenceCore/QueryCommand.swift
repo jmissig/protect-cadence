@@ -138,7 +138,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
     case missingValue(String)
     case invalidInteger(flag: String, value: String)
     case invalidPositiveInteger(flag: String, value: String)
-    case invalidISO8601(flag: String, value: String)
+    case invalidTimeBound(flag: String, value: String)
     case invalidTimeOfDay(String)
     case invalidWeekday(String)
     case invalidOrder(String)
@@ -161,8 +161,8 @@ public enum QueryCLIError: Error, CustomStringConvertible {
             return "invalid integer '\(value)' for \(flag)"
         case let .invalidPositiveInteger(flag, value):
             return "\(flag) must be greater than zero, got '\(value)'"
-        case let .invalidISO8601(flag, value):
-            return "invalid ISO8601 value '\(value)' for \(flag)"
+        case let .invalidTimeBound(flag, value):
+            return "invalid time value '\(value)' for \(flag), expected ISO 8601 with Z or explicit offset, or local YYYY-MM-DD[ T]HH:MM[:SS]"
         case let .invalidTimeOfDay(value):
             return "invalid time-of-day range '\(value)', expected HH:MM-HH:MM"
         case let .invalidWeekday(value):
@@ -190,13 +190,142 @@ enum QueryDateParser {
         return formatter
     }
 
-    static func parse(_ value: String) -> Date? {
-        makeInternetDateTimeFormatter(fractionalSeconds: true).date(from: value)
-            ?? makeInternetDateTimeFormatter(fractionalSeconds: false).date(from: value)
+    static func parse(
+        _ value: String,
+        timeZone: TimeZone = .current,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> Date? {
+        parseISO8601(value) ?? parseLocal(value, timeZone: timeZone, calendar: calendar)
     }
 
     static func encode(_ date: Date) -> String {
         makeInternetDateTimeFormatter(fractionalSeconds: false).string(from: date)
+    }
+
+    private static func parseISO8601(_ value: String) -> Date? {
+        makeInternetDateTimeFormatter(fractionalSeconds: true).date(from: value)
+            ?? makeInternetDateTimeFormatter(fractionalSeconds: false).date(from: value)
+    }
+
+    private static func parseLocal(_ value: String, timeZone: TimeZone, calendar: Calendar) -> Date? {
+        let parts = value.split(separator: " ", omittingEmptySubsequences: false)
+        let datePart: String
+        let timePart: String?
+
+        switch parts.count {
+        case 1:
+            let single = String(parts[0])
+            if single.contains("T") {
+                let dateTimeParts = single.split(separator: "T", omittingEmptySubsequences: false)
+                guard dateTimeParts.count == 2 else {
+                    return nil
+                }
+                datePart = String(dateTimeParts[0])
+                timePart = String(dateTimeParts[1])
+            } else {
+                datePart = single
+                timePart = nil
+            }
+        case 2:
+            datePart = String(parts[0])
+            timePart = String(parts[1])
+        default:
+            return nil
+        }
+
+        guard let date = parseLocalDate(datePart) else {
+            return nil
+        }
+
+        let time: (hour: Int, minute: Int, second: Int)
+        if let timePart {
+            guard let parsedTime = parseLocalTime(timePart) else {
+                return nil
+            }
+            time = parsedTime
+        } else {
+            time = (hour: 0, minute: 0, second: 0)
+        }
+
+        var localCalendar = calendar
+        localCalendar.timeZone = timeZone
+        let components = DateComponents(
+            timeZone: timeZone,
+            year: date.year,
+            month: date.month,
+            day: date.day,
+            hour: time.hour,
+            minute: time.minute,
+            second: time.second
+        )
+
+        guard let resolved = localCalendar.date(from: components) else {
+            return nil
+        }
+
+        // Reject local wall-clock values that Foundation normalizes, including DST gaps.
+        let resolvedComponents = localCalendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: resolved
+        )
+        guard resolvedComponents.year == date.year,
+              resolvedComponents.month == date.month,
+              resolvedComponents.day == date.day,
+              resolvedComponents.hour == time.hour,
+              resolvedComponents.minute == time.minute,
+              resolvedComponents.second == time.second
+        else {
+            return nil
+        }
+
+        return resolved
+    }
+
+    private static func parseLocalDate(_ rawValue: String) -> (year: Int, month: Int, day: Int)? {
+        let parts = rawValue.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 3,
+              parts[0].count == 4,
+              parts[1].count == 2,
+              parts[2].count == 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2]),
+              (1...12).contains(month),
+              (1...31).contains(day)
+        else {
+            return nil
+        }
+
+        return (year, month, day)
+    }
+
+    private static func parseLocalTime(_ rawValue: String) -> (hour: Int, minute: Int, second: Int)? {
+        let parts = rawValue.split(separator: ":", omittingEmptySubsequences: false)
+        guard (parts.count == 2 || parts.count == 3),
+              parts[0].count == 2,
+              parts[1].count == 2,
+              let hour = Int(parts[0]),
+              let minute = Int(parts[1]),
+              (0...23).contains(hour),
+              (0...59).contains(minute)
+        else {
+            return nil
+        }
+
+        let second: Int
+        if parts.count == 3 {
+            guard parts[2].count == 2,
+                  let parsedSecond = Int(parts[2]),
+                  (0...59).contains(parsedSecond)
+            else {
+                return nil
+            }
+            second = parsedSecond
+        } else {
+            second = 0
+        }
+
+        return (hour, minute, second)
     }
 }
 
@@ -269,13 +398,13 @@ public struct QueryCLI: Sendable {
             case "--since":
                 let rawValue = try popValue(index: &index, flag: argument)
                 guard let parsed = QueryDateParser.parse(rawValue) else {
-                    throw QueryCLIError.invalidISO8601(flag: argument, value: rawValue)
+                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
                 }
                 explicitSince = parsed
             case "--until":
                 let rawValue = try popValue(index: &index, flag: argument)
                 guard let parsed = QueryDateParser.parse(rawValue) else {
-                    throw QueryCLIError.invalidISO8601(flag: argument, value: rawValue)
+                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
                 }
                 explicitUntil = parsed
             case "--camera":

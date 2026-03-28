@@ -174,6 +174,25 @@ One Protect event may normalize into multiple rows when Protect reports multiple
 
 If schema pressure grows quickly, stop and reconsider the model before adding columns.
 
+## Time Zone Policy
+
+`protect-cadence` should treat event timestamps primarily as instants, then apply local-time interpretation where human-oriented slicing needs it.
+
+Preferred policy:
+- store event timestamps as absolute times in SQLite
+- use local machine time when evaluating human-time groupings and filters such as:
+  - `weekday`
+  - `date`
+  - `hour`
+  - `time-of-day`
+- accept explicit ISO 8601 bounds for `--since` / `--until`
+- keep comparison/query semantics clear about bounds, but do not overcomplicate the schema with separate local-wall-clock provenance fields unless a real need appears
+
+Rationale:
+- for camera detections, the important fact is usually that an event happened at a particular moment
+- downstream queries often need local household views like “weekday mornings” or “after 22:00”, so local-time interpretation belongs in the query layer
+- unlike `clime`, this project does not need to preserve the exact emitted timestamp string plus offset as a first-class artifact of record
+
 ## CLI Direction
 
 The CLI is the main user and agent interface.
