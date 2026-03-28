@@ -4,11 +4,18 @@
 
 ### Real controller validation
 
-- Run the new bounded HTTP ingest against a real local Protect controller.
-- Capture a small fresh sanitized snapshot with `--write-api-snapshot-dir`.
-- Confirm whether `detectedAt ?? start` is still the right `timeStart` rule on real recent events.
-- Confirm whether settled-event filtering by `end != nil` matches how Protect exposes finished detections in practice.
-- Check whether any real event shape pressures `event_id + kind` as the dedupe key.
+Completed on 2026-03-27 via live `protect-cadence validate` runs against the local controller.
+
+Confirmed:
+- live samples currently use `id` rather than `eventID` as the practical source-event identifier
+- `detectedAt` was absent in sampled live events, so current practical behavior is `timeStart = start` even though `detectedAt ?? start` remains a safe rule
+- settled/open behavior under `end != nil` is meaningful on current live data; a live Den-camera motion run produced an unsettled event with no `end`
+- the current dedupe key shape (`source event id + normalized kind`) showed no collision pressure in sampled live data
+- multi-kind smart-detect events are real and still support the current normalization model
+
+Follow-up later if useful:
+- capture and commit a fresh sanitized snapshot with `--write-api-snapshot-dir`
+- rerun validation occasionally if Protect firmware / API behavior changes materially
 
 ### API contract drift
 
