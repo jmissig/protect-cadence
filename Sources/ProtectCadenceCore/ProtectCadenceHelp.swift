@@ -127,6 +127,8 @@ public enum ProtectCadenceHelp {
                                 Repeatable local weekday filter
       --weekday                  Include Monday through Friday
       --weekend                  Include Saturday and Sunday
+      --date <YYYY-MM-DD>        Exact local calendar-date bucket filter
+      --hour <HH:00>             Exact local hour bucket filter
       --time-of-day <HH:MM-HH:MM>
                                 Local time-of-day filter, supports overnight ranges
       --limit <n>                Row limit, default 50
@@ -150,6 +152,8 @@ public enum ProtectCadenceHelp {
                                 Repeatable local weekday filter
       --weekday                  Include Monday through Friday
       --weekend                  Include Saturday and Sunday
+      --date <YYYY-MM-DD>        Exact local calendar-date bucket filter
+      --hour <HH:00>             Exact local hour bucket filter
       --time-of-day <HH:MM-HH:MM>
                                 Local time-of-day filter, supports overnight ranges
       --group-by <camera|kind|date|hour|weekday>
@@ -177,6 +181,8 @@ public enum ProtectCadenceHelp {
                                 Repeatable local weekday filter for both windows
       --weekday                  Include Monday through Friday in both windows
       --weekend                  Include Saturday and Sunday in both windows
+      --date <YYYY-MM-DD>        Exact local calendar-date bucket filter for both windows
+      --hour <HH:00>             Exact local hour bucket filter for both windows
       --time-of-day <HH:MM-HH:MM>
                                 Local time-of-day filter for both windows
 

@@ -82,6 +82,7 @@ protect-cadence query events --last-hours 24
 protect-cadence query events --since 2026-03-25T00:00:00Z
 protect-cadence query events --since 2026-03-25T00:00:00Z --until 2026-03-26T00:00:00Z
 protect-cadence query events --camera Driveway --kind person
+protect-cadence query events --date 2026-03-25 --hour 08:00
 protect-cadence query events --day-of-week mon --day-of-week wed
 protect-cadence query events --weekday
 protect-cadence query events --weekend --time-of-day 22:00-06:00
@@ -111,9 +112,13 @@ Notes:
 - `--day-of-week` is repeatable and uses local weekdays: `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat`
 - `--weekday` expands to Monday through Friday
 - `--weekend` expands to Saturday and Sunday
+- `--date` applies an exact local calendar-date bucket inside the selected window
+- `--hour` applies an exact local hour bucket inside the selected window
 - counts treat each normalized cadence event as one event
 - `query summary` includes `eventCount` plus `sourceEventCount` provenance based on distinct Protect `event_id`
+- `query summary` groups now include a `drillDown` descriptor that points back to the matching `events` slice
 - `query compare` reports those same counts for both windows plus simple deltas
+- `query compare` groups now include `windowDrillDown` and `comparisonWindowDrillDown` descriptors for both bucket slices
 - output is JSON
 
 ## Overrides

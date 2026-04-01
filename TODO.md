@@ -40,13 +40,13 @@ Completed recently:
 
 Still open:
 - Extend `compare` beyond the first window-to-window slice only when the next shape stays obviously descriptive.
-  - Immediate next step: replace the current single-helper compare state with a real compare-mode model and add `--vs-prior-window`.
+  - `--vs-prior-window` now exists; later helpers can build from the current compare-mode model.
   - Likely later helpers: same weekday across prior weeks, before/after a date, or one camera vs another camera.
   - Preserve the current zero/empty-bucket behavior with explicit regression tests so absences remain inspectable evidence.
   - Keep it mathematical and evidence-oriented; do not add anomaly judgments.
 - Add a drill-down path from aggregate output to representative raw events so downstream tools can inspect the evidence behind a bucket.
-  - Prefer a one-hop path from compare/summary output to the underlying `events` slice or an equivalent machine-readable drill-down descriptor.
-  - Prefer descriptor objects over raw shell-command strings, especially for grouped outputs like `date` and `hour` that current `events` flags may not express directly.
+  - The base drill-down descriptor now exists on summary/compare groups and points back to `events` with exact bucket filters.
+  - Follow up only if downstream tools need richer drill-down metadata beyond the current `events`-targeted descriptor shape.
 - Add distribution-oriented summaries so downstream tools can learn rhythms rather than just totals.
   - Examples: counts by hour-of-day, day-of-week, and camera within a window.
   - Keep outputs descriptive and evidence-oriented; do not label anything normal or abnormal.

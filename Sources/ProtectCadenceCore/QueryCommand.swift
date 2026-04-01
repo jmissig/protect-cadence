@@ -91,19 +91,25 @@ public struct QueryFilters: Codable, Sendable, Equatable {
     public let kinds: [String]
     public let weekdays: [QueryWeekday]
     public let timeOfDay: QueryTimeOfDayRange?
+    public let date: String?
+    public let hour: String?
 
     public init(
         window: QueryWindow? = nil,
         cameras: [String] = [],
         kinds: [String] = [],
         weekdays: [QueryWeekday] = [],
-        timeOfDay: QueryTimeOfDayRange? = nil
+        timeOfDay: QueryTimeOfDayRange? = nil,
+        date: String? = nil,
+        hour: String? = nil
     ) {
         self.window = window
         self.cameras = cameras
         self.kinds = kinds
         self.weekdays = weekdays
         self.timeOfDay = timeOfDay
+        self.date = date
+        self.hour = hour
     }
 }
 
@@ -191,6 +197,8 @@ public enum QueryCLIError: Error, CustomStringConvertible {
     case invalidTimeBound(flag: String, value: String)
     case invalidTimeOfDay(String)
     case invalidWeekday(String)
+    case invalidDate(String)
+    case invalidHour(String)
     case invalidOrder(String)
     case invalidGroupBy(String)
     case conflictingWindowFlags
@@ -221,6 +229,10 @@ public enum QueryCLIError: Error, CustomStringConvertible {
             return "invalid time-of-day range '\(value)', expected HH:MM-HH:MM"
         case let .invalidWeekday(value):
             return "invalid value '\(value)' for --day-of-week, expected sun, mon, tue, wed, thu, fri, or sat"
+        case let .invalidDate(value):
+            return "invalid value '\(value)' for --date, expected local YYYY-MM-DD"
+        case let .invalidHour(value):
+            return "invalid value '\(value)' for --hour, expected HH:00"
         case let .invalidOrder(value):
             return "invalid value '\(value)' for --order, expected newest or oldest"
         case let .invalidGroupBy(value):
@@ -418,6 +430,8 @@ public struct QueryCLI: Sendable {
         var kinds: [String] = []
         var weekdays: [QueryWeekday] = []
         var timeOfDay: QueryTimeOfDayRange?
+        var date: String?
+        var hour: String?
         var order: EventOrder = .newest
         var groupBy: [SummaryGroupBy] = []
 
@@ -517,6 +531,18 @@ public struct QueryCLI: Sendable {
                     throw QueryCLIError.invalidTimeOfDay(rawValue)
                 }
                 timeOfDay = parsed
+            case "--date":
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard Self.isValidLocalDateBucket(rawValue) else {
+                    throw QueryCLIError.invalidDate(rawValue)
+                }
+                date = rawValue
+            case "--hour":
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard Self.isValidHourBucket(rawValue) else {
+                    throw QueryCLIError.invalidHour(rawValue)
+                }
+                hour = rawValue
             case "--order":
                 let rawValue = try popValue(index: &index, flag: argument)
                 guard let parsed = EventOrder(rawValue: rawValue) else {
@@ -583,7 +609,9 @@ public struct QueryCLI: Sendable {
             cameras: cameras,
             kinds: kinds,
             weekdays: Self.uniqueWeekdays(weekdays),
-            timeOfDay: timeOfDay
+            timeOfDay: timeOfDay,
+            date: date,
+            hour: hour
         )
         self.windowBounds = windowBounds
         self.lastHours = lastHours
@@ -637,7 +665,9 @@ public struct QueryCLI: Sendable {
                 cameras: filters.cameras,
                 kinds: filters.kinds,
                 weekdays: filters.weekdays,
-                timeOfDay: filters.timeOfDay
+                timeOfDay: filters.timeOfDay,
+                date: filters.date,
+                hour: filters.hour
             )
         }
 
@@ -650,7 +680,9 @@ public struct QueryCLI: Sendable {
                 cameras: filters.cameras,
                 kinds: filters.kinds,
                 weekdays: filters.weekdays,
-                timeOfDay: filters.timeOfDay
+                timeOfDay: filters.timeOfDay,
+                date: filters.date,
+                hour: filters.hour
             )
         }
 
@@ -666,7 +698,9 @@ public struct QueryCLI: Sendable {
             cameras: filters.cameras,
             kinds: filters.kinds,
             weekdays: filters.weekdays,
-            timeOfDay: filters.timeOfDay
+            timeOfDay: filters.timeOfDay,
+            date: filters.date,
+            hour: filters.hour
         )
     }
 
@@ -710,6 +744,49 @@ public struct QueryCLI: Sendable {
         }
 
         return (hour, minute)
+    }
+
+    private static func isValidLocalDateBucket(_ rawValue: String) -> Bool {
+        let parts = rawValue.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 3,
+              parts[0].count == 4,
+              parts[1].count == 2,
+              parts[2].count == 2,
+              let year = Int(parts[0]),
+              let month = Int(parts[1]),
+              let day = Int(parts[2])
+        else {
+            return false
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let components = DateComponents(
+            timeZone: .current,
+            year: year,
+            month: month,
+            day: day,
+            hour: 0,
+            minute: 0,
+            second: 0
+        )
+
+        guard let resolved = calendar.date(from: components) else {
+            return false
+        }
+
+        let resolvedComponents = calendar.dateComponents([.year, .month, .day], from: resolved)
+        return resolvedComponents.year == year
+            && resolvedComponents.month == month
+            && resolvedComponents.day == day
+    }
+
+    private static func isValidHourBucket(_ rawValue: String) -> Bool {
+        guard let parsed = parseClock(rawValue) else {
+            return false
+        }
+
+        return parsed.minute == 0
     }
 }
 

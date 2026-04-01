@@ -817,6 +817,58 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func eventsRequestCanFilterByExactLocalDateAndHourBuckets() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 6, minute: 5),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "match-a"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 6, minute: 45),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "match-b"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 7, minute: 5),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "wrong-hour"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 26, hour: 6, minute: 10),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "wrong-date"
+                ),
+            ],
+            into: database
+        )
+
+        let rows = try database.fetchEvents(
+            EventsRequest(
+                limit: 10,
+                order: .oldest,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 25, hour: 0, minute: 0),
+                        end: localDate(day: 27, hour: 0, minute: 0)
+                    ),
+                    date: "2026-03-25",
+                    hour: "06:00"
+                )
+            )
+        )
+
+        #expect(rows.map(\.eventID) == ["match-a", "match-b"])
+    }
+
+    @Test
     func summaryGroupsRowsByCameraAndKind() throws {
         let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
 
@@ -865,9 +917,45 @@ struct ProtectCadenceCoreTests {
         #expect(summary.totalSourceEventCount == 3)
         #expect(
             summary.groups == [
-                SummaryGroup(group: ["camera": "Backyard", "kind": "animal"], eventCount: 1, sourceEventCount: 1),
-                SummaryGroup(group: ["camera": "Driveway", "kind": "person"], eventCount: 2, sourceEventCount: 2),
-                SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], eventCount: 1, sourceEventCount: 1),
+                summaryGroup(
+                    group: ["camera": "Backyard", "kind": "animal"],
+                    eventCount: 1,
+                    sourceEventCount: 1,
+                    filters: QueryFilters(
+                        window: QueryWindow(
+                            start: Date(timeIntervalSince1970: 90),
+                            end: Date(timeIntervalSince1970: 130)
+                        ),
+                        cameras: ["Backyard"],
+                        kinds: ["animal"]
+                    )
+                ),
+                summaryGroup(
+                    group: ["camera": "Driveway", "kind": "person"],
+                    eventCount: 2,
+                    sourceEventCount: 2,
+                    filters: QueryFilters(
+                        window: QueryWindow(
+                            start: Date(timeIntervalSince1970: 90),
+                            end: Date(timeIntervalSince1970: 130)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    )
+                ),
+                summaryGroup(
+                    group: ["camera": "Driveway", "kind": "vehicle"],
+                    eventCount: 1,
+                    sourceEventCount: 1,
+                    filters: QueryFilters(
+                        window: QueryWindow(
+                            start: Date(timeIntervalSince1970: 90),
+                            end: Date(timeIntervalSince1970: 130)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["vehicle"]
+                    )
+                ),
             ]
         )
     }
@@ -913,7 +1001,21 @@ struct ProtectCadenceCoreTests {
 
         #expect(summary.totalEventCount == 1)
         #expect(summary.totalSourceEventCount == 1)
-        #expect(summary.groups == [SummaryGroup(group: ["camera": "Driveway", "kind": "person"], eventCount: 1, sourceEventCount: 1)])
+        #expect(summary.groups == [
+            summaryGroup(
+                group: ["camera": "Driveway", "kind": "person"],
+                eventCount: 1,
+                sourceEventCount: 1,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: Date(timeIntervalSince1970: 100),
+                        end: Date(timeIntervalSince1970: 200)
+                    ),
+                    cameras: ["Driveway"],
+                    kinds: ["person"]
+                )
+            ),
+        ])
     }
 
     @Test
@@ -958,8 +1060,32 @@ struct ProtectCadenceCoreTests {
         #expect(summary.totalEventCount == 3)
         #expect(summary.totalSourceEventCount == 2)
         #expect(summary.groups == [
-            SummaryGroup(group: ["camera": "Driveway", "kind": "person"], eventCount: 2, sourceEventCount: 2),
-            SummaryGroup(group: ["camera": "Driveway", "kind": "vehicle"], eventCount: 1, sourceEventCount: 1),
+            summaryGroup(
+                group: ["camera": "Driveway", "kind": "person"],
+                eventCount: 2,
+                sourceEventCount: 2,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: Date(timeIntervalSince1970: 90),
+                        end: Date(timeIntervalSince1970: 110)
+                    ),
+                    cameras: ["Driveway"],
+                    kinds: ["person"]
+                )
+            ),
+            summaryGroup(
+                group: ["camera": "Driveway", "kind": "vehicle"],
+                eventCount: 1,
+                sourceEventCount: 1,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: Date(timeIntervalSince1970: 90),
+                        end: Date(timeIntervalSince1970: 110)
+                    ),
+                    cameras: ["Driveway"],
+                    kinds: ["vehicle"]
+                )
+            ),
         ])
     }
 
@@ -1025,10 +1151,18 @@ struct ProtectCadenceCoreTests {
         #expect(summary.totalEventCount == 4)
         #expect(summary.totalSourceEventCount == 3)
         #expect(summary.groups == [
-            SummaryGroup(
+            summaryGroup(
                 group: ["date": "2026-03-25", "hour": "08:00"],
                 eventCount: 4,
-                sourceEventCount: 3
+                sourceEventCount: 3,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 25, hour: 8, minute: 0),
+                        end: localDate(day: 25, hour: 9, minute: 0)
+                    ),
+                    date: "2026-03-25",
+                    hour: "08:00"
+                )
             ),
         ])
     }
@@ -1093,8 +1227,32 @@ struct ProtectCadenceCoreTests {
 
         #expect(summary.groupBy == [.date, .hour])
         #expect(summary.groups == [
-            SummaryGroup(group: ["date": "2026-03-24", "hour": "23:00"], eventCount: 2, sourceEventCount: 2),
-            SummaryGroup(group: ["date": "2026-03-25", "hour": "00:00"], eventCount: 1, sourceEventCount: 1),
+            summaryGroup(
+                group: ["date": "2026-03-24", "hour": "23:00"],
+                eventCount: 2,
+                sourceEventCount: 2,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 24, hour: 22, minute: 0),
+                        end: localDate(day: 25, hour: 1, minute: 0)
+                    ),
+                    date: "2026-03-24",
+                    hour: "23:00"
+                )
+            ),
+            summaryGroup(
+                group: ["date": "2026-03-25", "hour": "00:00"],
+                eventCount: 1,
+                sourceEventCount: 1,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 24, hour: 22, minute: 0),
+                        end: localDate(day: 25, hour: 1, minute: 0)
+                    ),
+                    date: "2026-03-25",
+                    hour: "00:00"
+                )
+            ),
         ])
     }
 
@@ -1143,8 +1301,30 @@ struct ProtectCadenceCoreTests {
         #expect(summary.totalSourceEventCount == 2)
         #expect(summary.groupBy == [.weekday])
         #expect(summary.groups == [
-            SummaryGroup(group: ["weekday": "sat"], eventCount: 1, sourceEventCount: 1),
-            SummaryGroup(group: ["weekday": "sun"], eventCount: 1, sourceEventCount: 1),
+            summaryGroup(
+                group: ["weekday": "sat"],
+                eventCount: 1,
+                sourceEventCount: 1,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 27, hour: 0, minute: 0),
+                        end: localDate(day: 30, hour: 0, minute: 0)
+                    ),
+                    weekdays: [.sat]
+                )
+            ),
+            summaryGroup(
+                group: ["weekday": "sun"],
+                eventCount: 1,
+                sourceEventCount: 1,
+                filters: QueryFilters(
+                    window: QueryWindow(
+                        start: localDate(day: 27, hour: 0, minute: 0),
+                        end: localDate(day: 30, hour: 0, minute: 0)
+                    ),
+                    weekdays: [.sun]
+                )
+            ),
         ])
     }
 
@@ -1177,12 +1357,24 @@ struct ProtectCadenceCoreTests {
             #expect(response.totalEventCount == 1)
             #expect(response.totalSourceEventCount == 1)
             #expect(response.countSemantics == .events)
-            #expect(response.groups == [SummaryGroup(group: ["camera": "Porch", "kind": "package"], eventCount: 1, sourceEventCount: 1)])
+            #expect(response.groups == [
+                summaryGroup(
+                    group: ["camera": "Porch", "kind": "package"],
+                    eventCount: 1,
+                    sourceEventCount: 1,
+                    filters: QueryFilters(
+                        window: QueryWindow(start: now.addingTimeInterval(-2 * 60 * 60), end: now),
+                        cameras: ["Porch"],
+                        kinds: ["package"]
+                    )
+                ),
+            ])
             #expect(response.filters.window == QueryWindow(start: now.addingTimeInterval(-2 * 60 * 60), end: now))
 
             let json = try JSONOutput.encode(output)
             #expect(json.contains("\"command\""))
             #expect(json.contains("\"filters\""))
+            #expect(json.contains("\"drillDown\""))
             #expect(json.contains("\"totalSourceEventCount\""))
             #expect(json.contains("\"eventCount\""))
             #expect(json.contains("\"sourceEventCount\""))
@@ -1523,6 +1715,8 @@ struct ProtectCadenceCoreTests {
             "--day-of-week", "mon",
             "--weekend",
             "--time-of-day", "22:15-06:45",
+            "--date", "2026-03-29",
+            "--hour", "06:00",
             "--order", "oldest",
             "--limit", "25",
         ])
@@ -1535,6 +1729,8 @@ struct ProtectCadenceCoreTests {
             "--weekday",
             "--day-of-week", "sun",
             "--time-of-day", "22:15-06:45",
+            "--date", "2026-03-30",
+            "--hour", "05:00",
             "--group-by", "date",
             "--group-by", "kind",
         ])
@@ -1548,6 +1744,8 @@ struct ProtectCadenceCoreTests {
         #expect(eventsCLI.filters.kinds == ["person", "vehicle"])
         #expect(eventsCLI.filters.weekdays == [.mon, .sun, .sat])
         #expect(eventsCLI.filters.timeOfDay == QueryTimeOfDayRange(startHour: 22, startMinute: 15, endHour: 6, endMinute: 45))
+        #expect(eventsCLI.filters.date == "2026-03-29")
+        #expect(eventsCLI.filters.hour == "06:00")
         #expect(eventsCLI.order == .oldest)
         #expect(eventsCLI.limit == 25)
 
@@ -1555,6 +1753,8 @@ struct ProtectCadenceCoreTests {
         #expect(summaryCLI.filters.kinds == ["person"])
         #expect(summaryCLI.filters.weekdays == [.mon, .tue, .wed, .thu, .fri, .sun])
         #expect(summaryCLI.filters.timeOfDay == QueryTimeOfDayRange(startHour: 22, startMinute: 15, endHour: 6, endMinute: 45))
+        #expect(summaryCLI.filters.date == "2026-03-30")
+        #expect(summaryCLI.filters.hour == "05:00")
         #expect(summaryCLI.windowBounds == QueryWindowBounds(
             since: QueryDateParser.parse(since)!,
             until: QueryDateParser.parse(until)!
@@ -1765,6 +1965,32 @@ struct ProtectCadenceCoreTests {
             Issue.record("expected invalid weekday error")
         } catch let error as QueryCLIError {
             #expect(error.description == "invalid value 'monday' for --day-of-week, expected sun, mon, tue, wed, thu, fri, or sat")
+        }
+    }
+
+    @Test
+    func queryCLIRejectsInvalidDateBucket() throws {
+        do {
+            _ = try QueryCLI(arguments: [
+                "events",
+                "--date", "2026-02-30",
+            ])
+            Issue.record("expected invalid date bucket error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "invalid value '2026-02-30' for --date, expected local YYYY-MM-DD")
+        }
+    }
+
+    @Test
+    func queryCLIRejectsInvalidHourBucket() throws {
+        do {
+            _ = try QueryCLI(arguments: [
+                "events",
+                "--hour", "07:30",
+            ])
+            Issue.record("expected invalid hour bucket error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "invalid value '07:30' for --hour, expected HH:00")
         }
     }
 
@@ -2038,7 +2264,20 @@ struct ProtectCadenceCoreTests {
         case let .summary(response):
             #expect(response.filters.weekdays == [.sun])
             #expect(response.totalEventCount == 1)
-            #expect(response.groups == [SummaryGroup(group: ["weekday": "sun"], eventCount: 1, sourceEventCount: 1)])
+            #expect(response.groups == [
+                summaryGroup(
+                    group: ["weekday": "sun"],
+                    eventCount: 1,
+                    sourceEventCount: 1,
+                    filters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 0, minute: 0),
+                            end: localDate(day: 30, hour: 0, minute: 0)
+                        ),
+                        weekdays: [.sun]
+                    )
+                ),
+            ])
         case .events, .compare:
             Issue.record("expected summary output")
         }
@@ -2112,26 +2351,74 @@ struct ProtectCadenceCoreTests {
             #expect(response.totalEventCountDelta == 1)
             #expect(response.totalSourceEventCountDelta == 1)
             #expect(response.groups == [
-                CompareGroup(
+                compareGroup(
                     group: ["camera": "Driveway", "kind": "person"],
                     window: CompareCounts(eventCount: 2, sourceEventCount: 2),
                     comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
                     eventCountDelta: 1,
-                    sourceEventCountDelta: 1
+                    sourceEventCountDelta: 1,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 26, hour: 8, minute: 0),
+                            end: localDate(day: 26, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    )
                 ),
-                CompareGroup(
+                compareGroup(
                     group: ["camera": "Driveway", "kind": "vehicle"],
                     window: CompareCounts(eventCount: 0, sourceEventCount: 0),
                     comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
                     eventCountDelta: -1,
-                    sourceEventCountDelta: -1
+                    sourceEventCountDelta: -1,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["vehicle"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 26, hour: 8, minute: 0),
+                            end: localDate(day: 26, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["vehicle"]
+                    )
                 ),
-                CompareGroup(
+                compareGroup(
                     group: ["camera": "Porch", "kind": "package"],
                     window: CompareCounts(eventCount: 1, sourceEventCount: 1),
                     comparisonWindow: CompareCounts(eventCount: 0, sourceEventCount: 0),
                     eventCountDelta: 1,
-                    sourceEventCountDelta: 1
+                    sourceEventCountDelta: 1,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Porch"],
+                        kinds: ["package"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 26, hour: 8, minute: 0),
+                            end: localDate(day: 26, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Porch"],
+                        kinds: ["package"]
+                    )
                 ),
             ])
 
@@ -2139,6 +2426,8 @@ struct ProtectCadenceCoreTests {
             #expect(json.contains("\"comparisonWindow\""))
             #expect(json.contains("\"eventCountDelta\""))
             #expect(json.contains("\"comparisonTotals\""))
+            #expect(json.contains("\"windowDrillDown\""))
+            #expect(json.contains("\"comparisonWindowDrillDown\""))
         case .events, .summary:
             Issue.record("expected compare output")
         }
@@ -2183,19 +2472,51 @@ struct ProtectCadenceCoreTests {
         switch output {
         case let .compare(response):
             #expect(response.groups == [
-                CompareGroup(
+                compareGroup(
                     group: ["camera": "Backyard", "kind": "animal"],
                     window: CompareCounts(eventCount: 0, sourceEventCount: 0),
                     comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
                     eventCountDelta: -1,
-                    sourceEventCountDelta: -1
+                    sourceEventCountDelta: -1,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Backyard"],
+                        kinds: ["animal"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 26, hour: 8, minute: 0),
+                            end: localDate(day: 26, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Backyard"],
+                        kinds: ["animal"]
+                    )
                 ),
-                CompareGroup(
+                compareGroup(
                     group: ["camera": "Driveway", "kind": "person"],
                     window: CompareCounts(eventCount: 1, sourceEventCount: 1),
                     comparisonWindow: CompareCounts(eventCount: 0, sourceEventCount: 0),
                     eventCountDelta: 1,
-                    sourceEventCountDelta: 1
+                    sourceEventCountDelta: 1,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 26, hour: 8, minute: 0),
+                            end: localDate(day: 26, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    )
                 ),
             ])
         case .events, .summary:
@@ -2256,19 +2577,51 @@ struct ProtectCadenceCoreTests {
             #expect(response.comparisonTotals == CompareCounts(eventCount: 2, sourceEventCount: 2))
             #expect(response.totalEventCountDelta == -1)
             #expect(response.groups == [
-                CompareGroup(
+                compareGroup(
                     group: ["camera": "Driveway", "kind": "person"],
                     window: CompareCounts(eventCount: 1, sourceEventCount: 1),
                     comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
                     eventCountDelta: 0,
-                    sourceEventCountDelta: 0
+                    sourceEventCountDelta: 0,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 7, minute: 0),
+                            end: localDate(day: 27, hour: 8, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    )
                 ),
-                CompareGroup(
+                compareGroup(
                     group: ["camera": "Porch", "kind": "package"],
                     window: CompareCounts(eventCount: 0, sourceEventCount: 0),
                     comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
                     eventCountDelta: -1,
-                    sourceEventCountDelta: -1
+                    sourceEventCountDelta: -1,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Porch"],
+                        kinds: ["package"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 7, minute: 0),
+                            end: localDate(day: 27, hour: 8, minute: 0)
+                        ),
+                        cameras: ["Porch"],
+                        kinds: ["package"]
+                    )
                 ),
             ])
         case .events, .summary:
@@ -2658,6 +3011,44 @@ struct ProtectCadenceCoreTests {
                 cameraID: "raw-porch-camera"
             ),
         ]
+    }
+
+    private func drillDown(_ filters: QueryFilters) -> QueryDrillDownDescriptor {
+        QueryDrillDownDescriptor(filters: filters)
+    }
+
+    private func summaryGroup(
+        group: [String: String],
+        eventCount: Int,
+        sourceEventCount: Int,
+        filters: QueryFilters
+    ) -> SummaryGroup {
+        SummaryGroup(
+            group: group,
+            eventCount: eventCount,
+            sourceEventCount: sourceEventCount,
+            drillDown: drillDown(filters)
+        )
+    }
+
+    private func compareGroup(
+        group: [String: String],
+        window: CompareCounts,
+        comparisonWindow: CompareCounts,
+        eventCountDelta: Int,
+        sourceEventCountDelta: Int,
+        windowFilters: QueryFilters,
+        comparisonFilters: QueryFilters
+    ) -> CompareGroup {
+        CompareGroup(
+            group: group,
+            window: window,
+            comparisonWindow: comparisonWindow,
+            eventCountDelta: eventCountDelta,
+            sourceEventCountDelta: sourceEventCountDelta,
+            windowDrillDown: drillDown(windowFilters),
+            comparisonWindowDrillDown: drillDown(comparisonFilters)
+        )
     }
 }
 

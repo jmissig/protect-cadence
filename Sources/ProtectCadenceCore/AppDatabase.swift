@@ -246,15 +246,32 @@ public struct SummaryRequest: Sendable {
     }
 }
 
+public struct QueryDrillDownDescriptor: Codable, Sendable, Equatable {
+    public let command: String
+    public let filters: QueryFilters
+
+    public init(command: String = QuerySubcommand.events.rawValue, filters: QueryFilters) {
+        self.command = command
+        self.filters = filters
+    }
+}
+
 public struct SummaryGroup: Codable, Sendable, Equatable {
     public let group: [String: String]
     public let eventCount: Int
     public let sourceEventCount: Int
+    public let drillDown: QueryDrillDownDescriptor
 
-    public init(group: [String: String], eventCount: Int, sourceEventCount: Int) {
+    public init(
+        group: [String: String],
+        eventCount: Int,
+        sourceEventCount: Int,
+        drillDown: QueryDrillDownDescriptor
+    ) {
         self.group = group
         self.eventCount = eventCount
         self.sourceEventCount = sourceEventCount
+        self.drillDown = drillDown
     }
 }
 
@@ -324,19 +341,25 @@ public struct CompareGroup: Codable, Sendable, Equatable {
     public let comparisonWindow: CompareCounts
     public let eventCountDelta: Int
     public let sourceEventCountDelta: Int
+    public let windowDrillDown: QueryDrillDownDescriptor
+    public let comparisonWindowDrillDown: QueryDrillDownDescriptor
 
     public init(
         group: [String: String],
         window: CompareCounts,
         comparisonWindow: CompareCounts,
         eventCountDelta: Int,
-        sourceEventCountDelta: Int
+        sourceEventCountDelta: Int,
+        windowDrillDown: QueryDrillDownDescriptor,
+        comparisonWindowDrillDown: QueryDrillDownDescriptor
     ) {
         self.group = group
         self.window = window
         self.comparisonWindow = comparisonWindow
         self.eventCountDelta = eventCountDelta
         self.sourceEventCountDelta = sourceEventCountDelta
+        self.windowDrillDown = windowDrillDown
+        self.comparisonWindowDrillDown = comparisonWindowDrillDown
     }
 }
 
@@ -536,7 +559,9 @@ public final class ProtectCadenceDatabase {
                     cameras: request.filters.cameras,
                     kinds: request.filters.kinds,
                     weekdays: request.filters.weekdays,
-                    timeOfDay: request.filters.timeOfDay
+                    timeOfDay: request.filters.timeOfDay,
+                    date: request.filters.date,
+                    hour: request.filters.hour
                 ),
                 groupBy: request.groupBy
             )
@@ -560,7 +585,9 @@ public final class ProtectCadenceDatabase {
                 groups: compareGroups(
                     windowGroups: windowSnapshot.groups,
                     comparisonGroups: comparisonSnapshot.groups,
-                    groupBy: request.groupBy
+                    groupBy: request.groupBy,
+                    primaryFilters: request.filters,
+                    comparisonWindow: request.comparisonWindow
                 )
             )
         }
@@ -568,6 +595,7 @@ public final class ProtectCadenceDatabase {
 
     private func fetchSummaryGroups(
         db: Database,
+        filters: QueryFilters,
         groupBy: [SummaryGroupBy],
         whereClause: EventWhereClause
     ) throws -> [SummaryGroup] {
@@ -589,7 +617,12 @@ public final class ProtectCadenceDatabase {
             return SummaryGroup(
                 group: values,
                 eventCount: row["event_count"],
-                sourceEventCount: row["source_event_count"]
+                sourceEventCount: row["source_event_count"],
+                drillDown: makeDrillDownDescriptor(
+                    baseFilters: filters,
+                    group: values,
+                    groupBy: groupBy
+                )
             )
         }
     }
@@ -626,6 +659,7 @@ public final class ProtectCadenceDatabase {
             totalSourceEventCount: totalSourceEventCount,
             groups: try fetchSummaryGroups(
                 db: db,
+                filters: filters,
                 groupBy: groupBy,
                 whereClause: whereClause
             )
@@ -635,7 +669,9 @@ public final class ProtectCadenceDatabase {
     private func compareGroups(
         windowGroups: [SummaryGroup],
         comparisonGroups: [SummaryGroup],
-        groupBy: [SummaryGroupBy]
+        groupBy: [SummaryGroupBy],
+        primaryFilters: QueryFilters,
+        comparisonWindow: QueryWindow
     ) -> [CompareGroup] {
         let windowMap = Dictionary(uniqueKeysWithValues: windowGroups.map { (groupKey(for: $0.group, groupBy: groupBy), $0) })
         let comparisonMap = Dictionary(uniqueKeysWithValues: comparisonGroups.map { (groupKey(for: $0.group, groupBy: groupBy), $0) })
@@ -659,9 +695,72 @@ public final class ProtectCadenceDatabase {
                 window: windowCounts,
                 comparisonWindow: comparisonCounts,
                 eventCountDelta: windowCounts.eventCount - comparisonCounts.eventCount,
-                sourceEventCountDelta: windowCounts.sourceEventCount - comparisonCounts.sourceEventCount
+                sourceEventCountDelta: windowCounts.sourceEventCount - comparisonCounts.sourceEventCount,
+                windowDrillDown: windowGroup?.drillDown ?? makeDrillDownDescriptor(
+                    baseFilters: primaryFilters,
+                    group: group,
+                    groupBy: groupBy
+                ),
+                comparisonWindowDrillDown: comparisonGroup?.drillDown ?? makeDrillDownDescriptor(
+                    baseFilters: QueryFilters(
+                        window: comparisonWindow,
+                        cameras: primaryFilters.cameras,
+                        kinds: primaryFilters.kinds,
+                        weekdays: primaryFilters.weekdays,
+                        timeOfDay: primaryFilters.timeOfDay,
+                        date: primaryFilters.date,
+                        hour: primaryFilters.hour
+                    ),
+                    group: group,
+                    groupBy: groupBy
+                )
             )
         }
+    }
+
+    private func makeDrillDownDescriptor(
+        baseFilters: QueryFilters,
+        group: [String: String],
+        groupBy: [SummaryGroupBy]
+    ) -> QueryDrillDownDescriptor {
+        var cameras = baseFilters.cameras
+        var kinds = baseFilters.kinds
+        var weekdays = baseFilters.weekdays
+        var date = baseFilters.date
+        var hour = baseFilters.hour
+
+        for dimension in groupBy {
+            guard let value = group[dimension.rawValue] else {
+                continue
+            }
+
+            switch dimension {
+            case .camera:
+                cameras = [value]
+            case .kind:
+                kinds = [value]
+            case .date:
+                date = value
+            case .hour:
+                hour = value
+            case .weekday:
+                if let weekday = QueryWeekday(rawValue: value) {
+                    weekdays = [weekday]
+                }
+            }
+        }
+
+        return QueryDrillDownDescriptor(
+            filters: QueryFilters(
+                window: baseFilters.window,
+                cameras: cameras,
+                kinds: kinds,
+                weekdays: weekdays,
+                timeOfDay: baseFilters.timeOfDay,
+                date: date,
+                hour: hour
+            )
+        )
     }
 
     private func groupKey(for group: [String: String], groupBy: [SummaryGroupBy]) -> String {
@@ -696,6 +795,16 @@ public final class ProtectCadenceDatabase {
             for weekday in filters.weekdays {
                 arguments += [weekday.sqliteWeekdayNumber]
             }
+        }
+
+        if let date = filters.date {
+            clauses.append("strftime('%Y-%m-%d', time_start, 'localtime') = ?")
+            arguments += [date]
+        }
+
+        if let hour = filters.hour {
+            clauses.append("strftime('%H:00', time_start, 'localtime') = ?")
+            arguments += [hour]
         }
 
         if let timeOfDay = filters.timeOfDay {
