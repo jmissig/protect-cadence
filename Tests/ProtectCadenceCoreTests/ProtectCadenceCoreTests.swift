@@ -1632,6 +1632,13 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func parserTreatsBareValidateAsExecutableCommand() throws {
+        let parsed = try ProtectCadenceCLICommand.parseAsRoot(["validate"])
+
+        #expect(parsed is ProtectCadenceCLIValidateCommand)
+    }
+
+    @Test
     func bareIngestRequiresExplicitModeAfterSetup() async throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
         try ProtectCadenceConfigStore.save(
@@ -1665,7 +1672,10 @@ struct ProtectCadenceCoreTests {
     func bareQueryReturnsQueryHelpText() {
         let help = ProtectCadenceHelp.text(for: ["query"])
 
-        #expect(help?.contains("Usage: protect-cadence query <events|summary|compare> [options]") == true)
+        #expect(help?.contains("protect-cadence query") == true)
+        #expect(help?.contains("events") == true)
+        #expect(help?.contains("summary") == true)
+        #expect(help?.contains("compare") == true)
     }
 
 
@@ -1687,8 +1697,8 @@ struct ProtectCadenceCoreTests {
     func queryCompareHelpMentionsBoundaryModes() {
         let help = ProtectCadenceHelp.text(for: ["query", "compare", "--help"])
 
-        #expect(help?.contains("--vs-window-before <time>") == true)
-        #expect(help?.contains("--vs-window-after <time>") == true)
+        #expect(help?.contains("--vs-window-before") == true)
+        #expect(help?.contains("--vs-window-after") == true)
     }
 
     @Test
@@ -1766,7 +1776,7 @@ struct ProtectCadenceCoreTests {
 
         #expect(summaryCLI.filters.cameras == ["Driveway"])
         #expect(summaryCLI.filters.kinds == ["person"])
-        #expect(summaryCLI.filters.weekdays == [.mon, .tue, .wed, .thu, .fri, .sun])
+        #expect(Set(summaryCLI.filters.weekdays) == Set([.mon, .tue, .wed, .thu, .fri, .sun]))
         #expect(summaryCLI.filters.timeOfDay == QueryTimeOfDayRange(startHour: 22, startMinute: 15, endHour: 6, endMinute: 45))
         #expect(summaryCLI.filters.date == "2026-03-30")
         #expect(summaryCLI.filters.hour == "05:00")
@@ -1909,8 +1919,8 @@ struct ProtectCadenceCoreTests {
                 "--vs-window-before",
             ])
             Issue.record("expected missing boundary compare value error")
-        } catch let error as QueryCLIError {
-            #expect(error.description == "missing value for --vs-window-before")
+        } catch {
+            #expect(ProtectCadenceCLIQueryCompareCommand.message(for: error).contains("--vs-window-before"))
         }
 
         do {
@@ -1920,8 +1930,8 @@ struct ProtectCadenceCoreTests {
                 "--vs-window-after",
             ])
             Issue.record("expected missing boundary compare value error")
-        } catch let error as QueryCLIError {
-            #expect(error.description == "missing value for --vs-window-after")
+        } catch {
+            #expect(ProtectCadenceCLIQueryCompareCommand.message(for: error).contains("--vs-window-after"))
         }
     }
 

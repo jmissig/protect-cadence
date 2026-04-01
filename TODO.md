@@ -94,7 +94,7 @@ These are not requests for embedded anomaly scoring. They are requests for query
 
 ### CLI / operator surface follow-up
 
-- Fix the current UX bug where bare `protect-cadence validate` falls through to help text instead of executing, while flag-bearing forms like `protect-cadence validate --last-hours 6` do run.
+- Bare `protect-cadence validate` now resolves through the same parser layer as other commands; keep it that way if the CLI surface is reshaped again.
 - Revisit whether `validate` should remain a first-class public subcommand long-term or move behind a more operator-facing / maintenance-oriented surface once the validation workflow stabilizes.
 
 ## Current State

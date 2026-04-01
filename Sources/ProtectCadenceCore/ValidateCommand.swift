@@ -31,89 +31,31 @@ public struct ValidateCLI: Sendable {
     public let configPath: String
 
     public init(arguments: [String]) throws {
-        var remaining = arguments
-        var lastHours = 6
-        var sampleLimit = 10
-        var snapshotDirectoryPath: String?
-        var controllerURL: String?
-        var username: String?
-        var password: String?
-        var allowInsecureTLS: Bool?
-        var configPath = ProtectCadencePaths.defaultConfigPath()
+        try self.init(command: ProtectCadenceCLIValidateCommand.parse(arguments))
+    }
 
-        func popValue(for flag: String) throws -> String {
-            guard let index = remaining.firstIndex(of: flag) else {
-                throw ValidateCLIError.missingValue(flag)
-            }
-            guard remaining.indices.contains(index + 1) else {
-                throw ValidateCLIError.missingValue(flag)
-            }
-
-            let value = remaining[index + 1]
-            remaining.removeSubrange(index...(index + 1))
-            return value
+    public init(command: ProtectCadenceCLIValidateCommand) throws {
+        guard command.lastHours > 0 else {
+            throw ValidateCLIError.invalidPositiveInteger(
+                flag: "--last-hours",
+                value: String(command.lastHours)
+            )
+        }
+        guard command.sampleLimit > 0 else {
+            throw ValidateCLIError.invalidPositiveInteger(
+                flag: "--sample-limit",
+                value: String(command.sampleLimit)
+            )
         }
 
-        func popPositiveInteger(for flag: String) throws -> Int? {
-            guard remaining.contains(flag) else {
-                return nil
-            }
-
-            let rawValue = try popValue(for: flag)
-            guard let parsed = Int(rawValue) else {
-                throw ValidateCLIError.invalidInteger(flag: flag, value: rawValue)
-            }
-            guard parsed > 0 else {
-                throw ValidateCLIError.invalidPositiveInteger(flag: flag, value: rawValue)
-            }
-            return parsed
-        }
-
-        if let parsedLastHours = try popPositiveInteger(for: "--last-hours") {
-            lastHours = parsedLastHours
-        }
-
-        if let parsedSampleLimit = try popPositiveInteger(for: "--sample-limit") {
-            sampleLimit = parsedSampleLimit
-        }
-
-        if remaining.contains("--write-api-snapshot-dir") {
-            snapshotDirectoryPath = try popValue(for: "--write-api-snapshot-dir")
-        }
-
-        if remaining.contains("--config") {
-            configPath = try popValue(for: "--config")
-        }
-
-        if remaining.contains("--controller-url") {
-            controllerURL = try popValue(for: "--controller-url")
-        }
-
-        if remaining.contains("--username") {
-            username = try popValue(for: "--username")
-        }
-
-        if remaining.contains("--password") {
-            password = try popValue(for: "--password")
-        }
-
-        if remaining.contains("--allow-insecure-tls") {
-            allowInsecureTLS = true
-            remaining.removeAll { $0 == "--allow-insecure-tls" }
-        }
-
-        if let unexpected = remaining.first {
-            throw ValidateCLIError.unexpectedArgument(unexpected)
-        }
-
-        self.lastHours = lastHours
-        self.sampleLimit = sampleLimit
-        self.snapshotDirectoryPath = snapshotDirectoryPath
-        self.controllerURL = controllerURL
-        self.username = username
-        self.password = password
-        self.allowInsecureTLS = allowInsecureTLS
-        self.configPath = configPath
+        self.lastHours = command.lastHours
+        self.sampleLimit = command.sampleLimit
+        self.snapshotDirectoryPath = command.snapshotDirectoryPath
+        self.controllerURL = command.authOverrides.controllerURL
+        self.username = command.authOverrides.username
+        self.password = command.authOverrides.password
+        self.allowInsecureTLS = command.authOverrides.allowInsecureTLS ? true : nil
+        self.configPath = command.configOptions.configPath
     }
 
     public func queryWindow(now: Date = Date()) -> QueryWindow {
@@ -648,7 +590,22 @@ public enum ProtectCadenceValidateRunner {
             ProtectControllerClient(configuration: configuration)
         }
     ) async throws -> ProtectControllerValidationResponse {
-        let cli = try ValidateCLI(arguments: arguments)
+        try await run(
+            cli: ValidateCLI(arguments: arguments),
+            now: now,
+            environment: environment,
+            clientFactory: clientFactory
+        )
+    }
+
+    public static func run(
+        cli: ValidateCLI,
+        now: Date = Date(),
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        clientFactory: @Sendable (ProtectControllerConfiguration) -> ProtectControllerClient = { configuration in
+            ProtectControllerClient(configuration: configuration)
+        }
+    ) async throws -> ProtectControllerValidationResponse {
         let configuration = try ProtectAuthResolver.resolveControllerConfiguration(
             overrides: ProtectAuthOverrides(
                 controllerURL: cli.controllerURL,

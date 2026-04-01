@@ -88,7 +88,20 @@ public enum ProtectCadenceAuthRunner {
         prompter: ProtectAuthPrompter = ConsoleProtectAuthPrompter(),
         fileManager: FileManager = .default
     ) throws -> AuthCommandResponse {
-        let cli = try AuthCLI(arguments: arguments)
+        try run(
+            cli: AuthCLI(arguments: arguments),
+            environment: environment,
+            prompter: prompter,
+            fileManager: fileManager
+        )
+    }
+
+    static func run(
+        cli: AuthCLI,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        prompter: ProtectAuthPrompter = ConsoleProtectAuthPrompter(),
+        fileManager: FileManager = .default
+    ) throws -> AuthCommandResponse {
 
         switch cli.action {
         case .login:
@@ -192,82 +205,37 @@ struct AuthCLI: Sendable {
     let force: Bool
 
     init(arguments: [String]) throws {
-        var remaining = arguments
+        try self.init(command: ProtectCadenceCLIAuthCommand.parse(arguments))
+    }
+
+    init(command: ProtectCadenceCLIAuthCommand) throws {
         let action: AuthAction
-        if let first = remaining.first, let parsedAction = AuthAction(rawValue: first) {
+        if let rawAction = command.action {
+            guard let parsedAction = AuthAction(rawValue: rawAction) else {
+                throw AuthCLIError.unexpectedArgument(rawAction)
+            }
             action = parsedAction
-            remaining.removeFirst()
         } else {
             action = .status
         }
 
-        var controllerURL: String?
-        var username: String?
-        var password: String?
-        var allowInsecureTLS: Bool?
-        var configPath = ProtectCadencePaths.defaultConfigPath()
-        var force = false
-
-        func popValue(for flag: String) throws -> String {
-            guard let index = remaining.firstIndex(of: flag) else {
-                throw AuthCLIError.missingValue(flag)
-            }
-            guard remaining.indices.contains(index + 1) else {
-                throw AuthCLIError.missingValue(flag)
-            }
-
-            let value = remaining[index + 1]
-            remaining.removeSubrange(index...(index + 1))
-            return value
-        }
-
-        if remaining.contains("--config") {
-            configPath = try popValue(for: "--config")
-        }
-
-        if remaining.contains("--controller-url") {
-            controllerURL = try popValue(for: "--controller-url")
-        }
-
-        if remaining.contains("--username") {
-            username = try popValue(for: "--username")
-        }
-
-        if remaining.contains("--password") {
-            password = try popValue(for: "--password")
-        }
-
-        if remaining.contains("--allow-insecure-tls") {
-            allowInsecureTLS = true
-            remaining.removeAll { $0 == "--allow-insecure-tls" }
-        }
-
-        if remaining.contains("--force") {
-            force = true
-            remaining.removeAll { $0 == "--force" }
-        }
-
-        if action != .login, password != nil {
+        if action != .login, command.authOverrides.password != nil {
             throw AuthCLIError.unexpectedArgument("--password")
         }
 
-        if action != .clear, force {
+        if action != .clear, command.force {
             throw AuthCLIError.unexpectedArgument("--force")
-        }
-
-        if let unexpected = remaining.first {
-            throw AuthCLIError.unexpectedArgument(unexpected)
         }
 
         self.action = action
         self.overrides = ProtectAuthOverrides(
-            controllerURL: controllerURL,
-            username: username,
-            password: password,
-            allowInsecureTLS: allowInsecureTLS
+            controllerURL: command.authOverrides.controllerURL,
+            username: command.authOverrides.username,
+            password: command.authOverrides.password,
+            allowInsecureTLS: command.authOverrides.allowInsecureTLS ? true : nil
         )
-        self.configPath = configPath
-        self.force = force
+        self.configPath = command.configOptions.configPath
+        self.force = command.force
     }
 }
 

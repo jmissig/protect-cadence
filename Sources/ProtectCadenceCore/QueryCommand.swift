@@ -437,168 +437,80 @@ public struct QueryCLI: Sendable {
     public let groupBy: [SummaryGroupBy]
 
     public init(arguments: [String]) throws {
-        var remaining = arguments
-        var databasePathOverride: String?
-        var configPath = ProtectCadencePaths.defaultConfigPath()
-        var limit = 50
-        var lastHours: Int?
-        var explicitSince: Date?
-        var explicitUntil: Date?
-        var comparisonSince: Date?
-        var comparisonUntil: Date?
-        var comparisonWindowBeforeBoundary: Date?
-        var comparisonWindowAfterBoundary: Date?
-        var comparisonHelperModes: [CompareMode] = []
-        var cameras: [String] = []
-        var kinds: [String] = []
-        var weekdays: [QueryWeekday] = []
-        var timeOfDay: QueryTimeOfDayRange?
-        var date: String?
-        var hour: String?
-        var order: EventOrder = .newest
-        var groupBy: [SummaryGroupBy] = []
-
-        guard let rawSubcommand = remaining.first else {
+        guard let rawSubcommand = arguments.first else {
             throw QueryCLIError.missingSubcommand
         }
         guard let subcommand = QuerySubcommand(rawValue: rawSubcommand) else {
             throw QueryCLIError.unknownSubcommand(rawSubcommand)
         }
-        remaining.removeFirst()
+        let remaining = Array(arguments.dropFirst())
 
-        func popValue(index: inout Int, flag: String) throws -> String {
-            let valueIndex = index + 1
-            guard remaining.indices.contains(valueIndex) else {
-                throw QueryCLIError.missingValue(flag)
-            }
-            index += 2
-            return remaining[valueIndex]
+        switch subcommand {
+        case .events:
+            try self.init(command: ProtectCadenceCLIQueryEventsCommand.parse(remaining))
+        case .summary:
+            try self.init(command: ProtectCadenceCLIQuerySummaryCommand.parse(remaining))
+        case .compare:
+            try self.init(command: ProtectCadenceCLIQueryCompareCommand.parse(remaining))
         }
+    }
 
-        func parsePositiveInteger(_ rawValue: String, flag: String) throws -> Int {
-            guard let parsed = Int(rawValue) else {
-                throw QueryCLIError.invalidInteger(flag: flag, value: rawValue)
-            }
-            guard parsed > 0 else {
-                throw QueryCLIError.invalidPositiveInteger(flag: flag, value: rawValue)
-            }
-            return parsed
-        }
+    init(command: ProtectCadenceCLIQueryEventsCommand) throws {
+        try self.init(
+            subcommand: .events,
+            databasePathOverride: command.databaseOptions.databasePathOverride,
+            configPath: command.configOptions.configPath,
+            primaryWindow: command.primaryWindow,
+            filterOptions: command.filters,
+            limit: command.limit,
+            orderRaw: command.order,
+            groupByRaw: [],
+            compareOptions: nil
+        )
+    }
 
-        var index = 0
-        while index < remaining.count {
-            let argument = remaining[index]
+    init(command: ProtectCadenceCLIQuerySummaryCommand) throws {
+        try self.init(
+            subcommand: .summary,
+            databasePathOverride: command.databaseOptions.databasePathOverride,
+            configPath: command.configOptions.configPath,
+            primaryWindow: command.primaryWindow,
+            filterOptions: command.filters,
+            limit: 50,
+            orderRaw: EventOrder.newest.rawValue,
+            groupByRaw: command.groupBy,
+            compareOptions: nil
+        )
+    }
 
-            switch argument {
-            case "--db":
-                databasePathOverride = try popValue(index: &index, flag: argument)
-            case "--config":
-                configPath = try popValue(index: &index, flag: argument)
-            case "--limit":
-                limit = try parsePositiveInteger(try popValue(index: &index, flag: argument), flag: argument)
-            case "--last-hours":
-                lastHours = try parsePositiveInteger(try popValue(index: &index, flag: argument), flag: argument)
-            case "--since":
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = QueryDateParser.parse(rawValue) else {
-                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
-                }
-                explicitSince = parsed
-            case "--until":
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = QueryDateParser.parse(rawValue) else {
-                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
-                }
-                explicitUntil = parsed
-            case "--vs-since" where subcommand == .compare:
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = QueryDateParser.parse(rawValue) else {
-                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
-                }
-                comparisonSince = parsed
-            case "--vs-until" where subcommand == .compare:
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = QueryDateParser.parse(rawValue) else {
-                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
-                }
-                comparisonUntil = parsed
-            case "--vs-window-before" where subcommand == .compare:
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = QueryDateParser.parse(rawValue) else {
-                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
-                }
-                comparisonWindowBeforeBoundary = parsed
-            case "--vs-window-after" where subcommand == .compare:
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = QueryDateParser.parse(rawValue) else {
-                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
-                }
-                comparisonWindowAfterBoundary = parsed
-            case "--vs-same-window-yesterday" where subcommand == .compare:
-                if !comparisonHelperModes.contains(.sameWindowYesterday) {
-                    comparisonHelperModes.append(.sameWindowYesterday)
-                }
-                index += 1
-            case "--vs-same-window-last-week" where subcommand == .compare:
-                if !comparisonHelperModes.contains(.sameWindowLastWeek) {
-                    comparisonHelperModes.append(.sameWindowLastWeek)
-                }
-                index += 1
-            case "--vs-prior-window" where subcommand == .compare:
-                if !comparisonHelperModes.contains(.priorWindow) {
-                    comparisonHelperModes.append(.priorWindow)
-                }
-                index += 1
-            case "--camera":
-                cameras.append(try popValue(index: &index, flag: argument))
-            case "--kind":
-                kinds.append(try popValue(index: &index, flag: argument))
-            case "--day-of-week":
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = QueryWeekday(rawValue: rawValue) else {
-                    throw QueryCLIError.invalidWeekday(rawValue)
-                }
-                weekdays.append(parsed)
-            case "--weekday":
-                weekdays.append(contentsOf: QueryWeekday.weekdays)
-                index += 1
-            case "--weekend":
-                weekdays.append(contentsOf: QueryWeekday.weekend)
-                index += 1
-            case "--time-of-day":
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = Self.parseTimeOfDayRange(rawValue) else {
-                    throw QueryCLIError.invalidTimeOfDay(rawValue)
-                }
-                timeOfDay = parsed
-            case "--date":
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard Self.isValidLocalDateBucket(rawValue) else {
-                    throw QueryCLIError.invalidDate(rawValue)
-                }
-                date = rawValue
-            case "--hour":
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard Self.isValidHourBucket(rawValue) else {
-                    throw QueryCLIError.invalidHour(rawValue)
-                }
-                hour = rawValue
-            case "--order":
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = EventOrder(rawValue: rawValue) else {
-                    throw QueryCLIError.invalidOrder(rawValue)
-                }
-                order = parsed
-            case "--group-by":
-                let rawValue = try popValue(index: &index, flag: argument)
-                guard let parsed = SummaryGroupBy(rawValue: rawValue) else {
-                    throw QueryCLIError.invalidGroupBy(rawValue)
-                }
-                groupBy.append(parsed)
-            default:
-                throw QueryCLIError.unexpectedArgument(argument)
-            }
-        }
+    init(command: ProtectCadenceCLIQueryCompareCommand) throws {
+        try self.init(
+            subcommand: .compare,
+            databasePathOverride: command.databaseOptions.databasePathOverride,
+            configPath: command.configOptions.configPath,
+            primaryWindow: command.primaryWindow,
+            filterOptions: command.filters,
+            limit: 50,
+            orderRaw: EventOrder.newest.rawValue,
+            groupByRaw: command.groupBy,
+            compareOptions: command.compareMode
+        )
+    }
+
+    private init(
+        subcommand: QuerySubcommand,
+        databasePathOverride: String?,
+        configPath: String,
+        primaryWindow: ProtectCadencePrimaryWindowOptions,
+        filterOptions: ProtectCadenceQueryFilterOptions,
+        limit: Int,
+        orderRaw: String,
+        groupByRaw: [String],
+        compareOptions: ProtectCadenceCompareModeOptions?
+    ) throws {
+        let lastHours = try Self.parsePositiveInteger(primaryWindow.lastHours, flag: "--last-hours")
+        let explicitSince = try Self.parseTimeBound(primaryWindow.since, flag: "--since")
+        let explicitUntil = try Self.parseTimeBound(primaryWindow.until, flag: "--until")
 
         if lastHours != nil, explicitSince != nil || explicitUntil != nil {
             throw QueryCLIError.conflictingWindowFlags
@@ -608,63 +520,29 @@ public struct QueryCLI: Sendable {
             throw QueryCLIError.untilRequiresSince
         }
 
-        let comparisonBoundaryModeCount = (comparisonWindowBeforeBoundary != nil ? 1 : 0)
-            + (comparisonWindowAfterBoundary != nil ? 1 : 0)
-
-        if comparisonHelperModes.count + comparisonBoundaryModeCount > 1
-            || ((comparisonWindowBeforeBoundary != nil || comparisonWindowAfterBoundary != nil) && (comparisonSince != nil || comparisonUntil != nil))
-            || (!comparisonHelperModes.isEmpty && (comparisonSince != nil || comparisonUntil != nil)) {
-            throw QueryCLIError.conflictingComparisonWindowFlags
-        }
-
-        if (comparisonSince == nil) != (comparisonUntil == nil) {
-            throw QueryCLIError.compareRequiresExplicitWindow
-        }
-
         let windowBounds: QueryWindowBounds?
         if explicitSince != nil || explicitUntil != nil {
             let bounds = QueryWindowBounds(since: explicitSince, until: explicitUntil)
-            if let explicitSince, let explicitUntil {
-                guard explicitSince < explicitUntil else {
-                    throw QueryCLIError.invalidWindowRange(start: explicitSince, end: explicitUntil)
-                }
+            if let explicitSince, let explicitUntil, explicitSince >= explicitUntil {
+                throw QueryCLIError.invalidWindowRange(start: explicitSince, end: explicitUntil)
             }
             windowBounds = bounds
         } else {
             windowBounds = nil
         }
 
-        let compareMode: CompareMode?
-        if let comparisonSince, let comparisonUntil {
-            guard comparisonSince < comparisonUntil else {
-                throw QueryCLIError.invalidWindowRange(start: comparisonSince, end: comparisonUntil)
-            }
-            compareMode = .explicitWindow(
-                QueryWindowBounds(since: comparisonSince, until: comparisonUntil)
-            )
-        } else if let comparisonWindowBeforeBoundary {
-            compareMode = .windowBefore(comparisonWindowBeforeBoundary)
-        } else if let comparisonWindowAfterBoundary {
-            compareMode = .windowAfter(comparisonWindowAfterBoundary)
-        } else {
-            compareMode = comparisonHelperModes.first
-        }
+        let compareMode = try Self.resolveCompareMode(compareOptions)
+        let order = try Self.parseOrder(orderRaw)
+        let groupBy = try groupByRaw.map(Self.parseGroupBy)
 
         self.compareMode = compareMode
         self.databasePathOverride = databasePathOverride
         self.configPath = configPath
         self.subcommand = subcommand
-        self.filters = QueryFilters(
-            cameras: cameras,
-            kinds: kinds,
-            weekdays: Self.uniqueWeekdays(weekdays),
-            timeOfDay: timeOfDay,
-            date: date,
-            hour: hour
-        )
+        self.filters = try Self.parseFilters(filterOptions)
         self.windowBounds = windowBounds
         self.lastHours = lastHours
-        self.limit = limit
+        self.limit = try Self.parsePositiveInteger(limit, flag: "--limit") ?? 50
         self.order = order
         self.groupBy = groupBy
     }
@@ -762,6 +640,133 @@ public struct QueryCLI: Sendable {
         }
 
         return unique
+    }
+
+    private static func parsePositiveInteger(_ value: Int?, flag: String) throws -> Int? {
+        guard let value else {
+            return nil
+        }
+        guard value > 0 else {
+            throw QueryCLIError.invalidPositiveInteger(flag: flag, value: String(value))
+        }
+        return value
+    }
+
+    private static func parseTimeBound(_ rawValue: String?, flag: String) throws -> Date? {
+        guard let rawValue else {
+            return nil
+        }
+        guard let parsed = QueryDateParser.parse(rawValue) else {
+            throw QueryCLIError.invalidTimeBound(flag: flag, value: rawValue)
+        }
+        return parsed
+    }
+
+    private static func parseFilters(_ options: ProtectCadenceQueryFilterOptions) throws -> QueryFilters {
+        var weekdays: [QueryWeekday] = []
+        for rawValue in options.dayOfWeek {
+            guard let parsed = QueryWeekday(rawValue: rawValue) else {
+                throw QueryCLIError.invalidWeekday(rawValue)
+            }
+            weekdays.append(parsed)
+        }
+        if options.weekday {
+            weekdays.append(contentsOf: QueryWeekday.weekdays)
+        }
+        if options.weekend {
+            weekdays.append(contentsOf: QueryWeekday.weekend)
+        }
+
+        let timeOfDay: QueryTimeOfDayRange?
+        if let rawTimeOfDay = options.timeOfDay {
+            guard let parsed = parseTimeOfDayRange(rawTimeOfDay) else {
+                throw QueryCLIError.invalidTimeOfDay(rawTimeOfDay)
+            }
+            timeOfDay = parsed
+        } else {
+            timeOfDay = nil
+        }
+
+        if let date = options.date, !isValidLocalDateBucket(date) {
+            throw QueryCLIError.invalidDate(date)
+        }
+
+        if let hour = options.hour, !isValidHourBucket(hour) {
+            throw QueryCLIError.invalidHour(hour)
+        }
+
+        return QueryFilters(
+            cameras: options.cameras,
+            kinds: options.kinds,
+            weekdays: uniqueWeekdays(weekdays),
+            timeOfDay: timeOfDay,
+            date: options.date,
+            hour: options.hour
+        )
+    }
+
+    private static func parseOrder(_ rawValue: String) throws -> EventOrder {
+        guard let parsed = EventOrder(rawValue: rawValue) else {
+            throw QueryCLIError.invalidOrder(rawValue)
+        }
+        return parsed
+    }
+
+    private static func parseGroupBy(_ rawValue: String) throws -> SummaryGroupBy {
+        guard let parsed = SummaryGroupBy(rawValue: rawValue) else {
+            throw QueryCLIError.invalidGroupBy(rawValue)
+        }
+        return parsed
+    }
+
+    private static func resolveCompareMode(_ options: ProtectCadenceCompareModeOptions?) throws -> CompareMode? {
+        guard let options else {
+            return nil
+        }
+
+        let comparisonSince = try parseTimeBound(options.since, flag: "--vs-since")
+        let comparisonUntil = try parseTimeBound(options.until, flag: "--vs-until")
+        let comparisonWindowBeforeBoundary = try parseTimeBound(options.windowBefore, flag: "--vs-window-before")
+        let comparisonWindowAfterBoundary = try parseTimeBound(options.windowAfter, flag: "--vs-window-after")
+
+        var comparisonHelperModes: [CompareMode] = []
+        if options.sameWindowYesterday {
+            comparisonHelperModes.append(.sameWindowYesterday)
+        }
+        if options.sameWindowLastWeek {
+            comparisonHelperModes.append(.sameWindowLastWeek)
+        }
+        if options.priorWindow {
+            comparisonHelperModes.append(.priorWindow)
+        }
+
+        let comparisonBoundaryModeCount = (comparisonWindowBeforeBoundary != nil ? 1 : 0)
+            + (comparisonWindowAfterBoundary != nil ? 1 : 0)
+
+        if comparisonHelperModes.count + comparisonBoundaryModeCount > 1
+            || ((comparisonWindowBeforeBoundary != nil || comparisonWindowAfterBoundary != nil) && (comparisonSince != nil || comparisonUntil != nil))
+            || (!comparisonHelperModes.isEmpty && (comparisonSince != nil || comparisonUntil != nil))
+        {
+            throw QueryCLIError.conflictingComparisonWindowFlags
+        }
+
+        if (comparisonSince == nil) != (comparisonUntil == nil) {
+            throw QueryCLIError.compareRequiresExplicitWindow
+        }
+
+        if let comparisonSince, let comparisonUntil {
+            guard comparisonSince < comparisonUntil else {
+                throw QueryCLIError.invalidWindowRange(start: comparisonSince, end: comparisonUntil)
+            }
+            return .explicitWindow(QueryWindowBounds(since: comparisonSince, until: comparisonUntil))
+        }
+        if let comparisonWindowBeforeBoundary {
+            return .windowBefore(comparisonWindowBeforeBoundary)
+        }
+        if let comparisonWindowAfterBoundary {
+            return .windowAfter(comparisonWindowAfterBoundary)
+        }
+        return comparisonHelperModes.first
     }
 
     private static func parseTimeOfDayRange(_ rawValue: String) -> QueryTimeOfDayRange? {

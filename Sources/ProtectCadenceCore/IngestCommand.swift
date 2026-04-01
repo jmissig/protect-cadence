@@ -40,136 +40,65 @@ public struct IngestCLI: Sendable {
     public let configPath: String
 
     public init(arguments: [String]) throws {
-        var remaining = arguments
-        var databasePathOverride: String?
-        var eventJSONPath: String?
-        var cameraJSONPath: String?
-        var cameraName: String?
-        var lastHours: Int?
-        var snapshotDirectoryPath: String?
-        var controllerURL: String?
-        var username: String?
-        var password: String?
-        var allowInsecureTLS: Bool?
-        var configPath = ProtectCadencePaths.defaultConfigPath()
+        try self.init(command: ProtectCadenceCLIIngestCommand.parse(arguments))
+    }
 
-        func popValue(for flag: String) throws -> String {
-            guard let index = remaining.firstIndex(of: flag) else {
-                throw IngestCLIError.missingValue(flag)
-            }
-            guard remaining.indices.contains(index + 1) else {
-                throw IngestCLIError.missingValue(flag)
-            }
-
-            let value = remaining[index + 1]
-            remaining.removeSubrange(index...(index + 1))
-            return value
-        }
-
-        func popInteger(for flag: String) throws -> Int? {
-            guard remaining.contains(flag) else {
-                return nil
-            }
-
-            let rawValue = try popValue(for: flag)
-            guard let parsed = Int(rawValue) else {
-                throw IngestCLIError.invalidInteger(flag: flag, value: rawValue)
-            }
-            return parsed
-        }
-
-        if remaining.contains("--db") {
-            databasePathOverride = try popValue(for: "--db")
-        }
-
-        if remaining.contains("--config") {
-            configPath = try popValue(for: "--config")
-        }
-
-        if remaining.contains("--event-json") {
-            eventJSONPath = try popValue(for: "--event-json")
-        }
-
-        if remaining.contains("--camera-json") {
-            cameraJSONPath = try popValue(for: "--camera-json")
-        }
-
-        if remaining.contains("--camera-name") {
-            cameraName = try popValue(for: "--camera-name")
-        }
-
-        if let parsedLastHours = try popInteger(for: "--last-hours") {
+    public init(command: ProtectCadenceCLIIngestCommand) throws {
+        let lastHours: Int?
+        if let parsedLastHours = command.lastHours {
             guard parsedLastHours > 0 else {
                 throw IngestCLIError.invalidPositiveInteger(flag: "--last-hours", value: String(parsedLastHours))
             }
             lastHours = parsedLastHours
+        } else {
+            lastHours = nil
         }
 
-        if remaining.contains("--write-api-snapshot-dir") {
-            snapshotDirectoryPath = try popValue(for: "--write-api-snapshot-dir")
-        }
-
-        if remaining.contains("--controller-url") {
-            controllerURL = try popValue(for: "--controller-url")
-        }
-
-        if remaining.contains("--username") {
-            username = try popValue(for: "--username")
-        }
-
-        if remaining.contains("--password") {
-            password = try popValue(for: "--password")
-        }
-
-        if remaining.contains("--allow-insecure-tls") {
-            allowInsecureTLS = true
-            remaining.removeAll { $0 == "--allow-insecure-tls" }
-        }
-
-        if eventJSONPath != nil, lastHours != nil {
+        if command.eventJSONPath != nil, lastHours != nil {
             throw IngestCLIError.conflictingModes
         }
 
-        if cameraJSONPath != nil, eventJSONPath == nil {
+        if command.cameraJSONPath != nil, command.eventJSONPath == nil {
             throw IngestCLIError.unexpectedArgument("--camera-json")
         }
 
-        if cameraName != nil, eventJSONPath == nil {
+        if command.cameraName != nil, command.eventJSONPath == nil {
             throw IngestCLIError.unexpectedArgument("--camera-name")
         }
 
-        if snapshotDirectoryPath != nil, lastHours == nil {
+        if command.snapshotDirectoryPath != nil, lastHours == nil {
             throw IngestCLIError.unexpectedArgument("--write-api-snapshot-dir")
         }
 
-        if (controllerURL != nil || username != nil || password != nil || allowInsecureTLS != nil), lastHours == nil {
-            if controllerURL != nil {
+        let allowInsecureTLS = command.authOverrides.allowInsecureTLS ? true : nil
+        if (command.authOverrides.controllerURL != nil
+            || command.authOverrides.username != nil
+            || command.authOverrides.password != nil
+            || allowInsecureTLS != nil), lastHours == nil
+        {
+            if command.authOverrides.controllerURL != nil {
                 throw IngestCLIError.unexpectedArgument("--controller-url")
             }
-            if username != nil {
+            if command.authOverrides.username != nil {
                 throw IngestCLIError.unexpectedArgument("--username")
             }
-            if password != nil {
+            if command.authOverrides.password != nil {
                 throw IngestCLIError.unexpectedArgument("--password")
             }
             throw IngestCLIError.unexpectedArgument("--allow-insecure-tls")
         }
 
-        if let unexpected = remaining.first {
-            throw IngestCLIError.unexpectedArgument(unexpected)
-        }
-
-        self.databasePathOverride = databasePathOverride
-        self.eventJSONPath = eventJSONPath
-        self.cameraJSONPath = cameraJSONPath
-        self.cameraName = cameraName
+        self.databasePathOverride = command.databaseOptions.databasePathOverride
+        self.eventJSONPath = command.eventJSONPath
+        self.cameraJSONPath = command.cameraJSONPath
+        self.cameraName = command.cameraName
         self.lastHours = lastHours
-        self.snapshotDirectoryPath = snapshotDirectoryPath
-        self.controllerURL = controllerURL
-        self.username = username
-        self.password = password
+        self.snapshotDirectoryPath = command.snapshotDirectoryPath
+        self.controllerURL = command.authOverrides.controllerURL
+        self.username = command.authOverrides.username
+        self.password = command.authOverrides.password
         self.allowInsecureTLS = allowInsecureTLS
-        self.configPath = configPath
+        self.configPath = command.configOptions.configPath
     }
 
     public func queryWindow(now: Date = Date()) -> QueryWindow? {
@@ -209,7 +138,30 @@ public enum ProtectCadenceIngestRunner {
             ProtectControllerClient(configuration: configuration)
         }
     ) async throws -> IngestResponse {
-        let cli = try IngestCLI(arguments: arguments)
+        try await run(
+            cli: IngestCLI(arguments: arguments),
+            now: now,
+            environment: environment,
+            prompter: prompter,
+            fileManager: fileManager,
+            statusOutput: statusOutput,
+            clientFactory: clientFactory
+        )
+    }
+
+    public static func run(
+        cli: IngestCLI,
+        now: Date = Date(),
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        prompter: ProtectAuthPrompter = ConsoleProtectAuthPrompter(),
+        fileManager: FileManager = .default,
+        statusOutput: @escaping @Sendable (String) -> Void = { line in
+            FileHandle.standardError.write(Data("\(line)\n".utf8))
+        },
+        clientFactory: @Sendable (ProtectControllerConfiguration) -> ProtectControllerClient = { configuration in
+            ProtectControllerClient(configuration: configuration)
+        }
+    ) async throws -> IngestResponse {
         let config = try ProtectCadenceConfigStore.load(from: cli.configPath)
 
         if cli.isBareCommand, requiresInteractiveSetup(config: config) {
