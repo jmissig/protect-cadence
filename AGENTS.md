@@ -81,6 +81,8 @@ The package should behave like a small local event warehouse with a narrow extra
 - Primary store: SQLite
 - SQLite wrapper: GRDB, used lightly
 
+Apple-authored Swift packages are perfectly acceptable here when they materially simplify the implementation without turning the project into a framework-heavy system. Recommending packages such as `swift-argument-parser` is fine when they reduce custom plumbing and keep the CLI legible.
+
 Use GRDB for:
 - database opening
 - migrations
