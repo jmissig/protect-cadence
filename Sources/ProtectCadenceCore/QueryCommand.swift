@@ -142,6 +142,8 @@ public enum CompareMode: Sendable, Equatable {
     case explicitWindow(QueryWindowBounds)
     case sameWindowYesterday
     case sameWindowLastWeek
+    case windowBefore(Date)
+    case windowAfter(Date)
     case priorWindow
 
     public func resolveComparisonWindow(
@@ -163,6 +165,18 @@ public enum CompareMode: Sendable, Equatable {
                 primaryWindow,
                 days: -7,
                 calendar: calendar
+            )
+        case let .windowBefore(boundary):
+            let duration = primaryWindow.end.timeIntervalSince(primaryWindow.start)
+            return QueryWindow(
+                start: boundary.addingTimeInterval(-duration),
+                end: boundary
+            )
+        case let .windowAfter(boundary):
+            let duration = primaryWindow.end.timeIntervalSince(primaryWindow.start)
+            return QueryWindow(
+                start: boundary,
+                end: boundary.addingTimeInterval(duration)
             )
         case .priorWindow:
             return QueryWindow.priorWindow(matching: primaryWindow)
@@ -247,7 +261,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
         case .conflictingWindowFlags:
             return "use either --last-hours or --since/--until, not both"
         case .conflictingComparisonWindowFlags:
-            return "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, or --vs-prior-window"
+            return "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window"
         case .untilRequiresSince:
             return "--until requires --since"
         case .compareRequiresPrimaryWindow:
@@ -255,7 +269,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
         case .compareRequiresExplicitWindow:
             return "--vs-since requires --vs-until, and --vs-until requires --vs-since"
         case .compareMissingMode:
-            return "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, or --vs-prior-window"
+            return "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window"
         case let .invalidWindowRange(start, end):
             return "resolved time window must have start earlier than end, got \(QueryDateParser.encode(start)) to \(QueryDateParser.encode(end))"
         }
@@ -432,6 +446,8 @@ public struct QueryCLI: Sendable {
         var explicitUntil: Date?
         var comparisonSince: Date?
         var comparisonUntil: Date?
+        var comparisonWindowBeforeBoundary: Date?
+        var comparisonWindowAfterBoundary: Date?
         var comparisonHelperModes: [CompareMode] = []
         var cameras: [String] = []
         var kinds: [String] = []
@@ -506,6 +522,18 @@ public struct QueryCLI: Sendable {
                     throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
                 }
                 comparisonUntil = parsed
+            case "--vs-window-before" where subcommand == .compare:
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = QueryDateParser.parse(rawValue) else {
+                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
+                }
+                comparisonWindowBeforeBoundary = parsed
+            case "--vs-window-after" where subcommand == .compare:
+                let rawValue = try popValue(index: &index, flag: argument)
+                guard let parsed = QueryDateParser.parse(rawValue) else {
+                    throw QueryCLIError.invalidTimeBound(flag: argument, value: rawValue)
+                }
+                comparisonWindowAfterBoundary = parsed
             case "--vs-same-window-yesterday" where subcommand == .compare:
                 if !comparisonHelperModes.contains(.sameWindowYesterday) {
                     comparisonHelperModes.append(.sameWindowYesterday)
@@ -580,7 +608,12 @@ public struct QueryCLI: Sendable {
             throw QueryCLIError.untilRequiresSince
         }
 
-        if comparisonHelperModes.count > 1 || (!comparisonHelperModes.isEmpty && (comparisonSince != nil || comparisonUntil != nil)) {
+        let comparisonBoundaryModeCount = (comparisonWindowBeforeBoundary != nil ? 1 : 0)
+            + (comparisonWindowAfterBoundary != nil ? 1 : 0)
+
+        if comparisonHelperModes.count + comparisonBoundaryModeCount > 1
+            || ((comparisonWindowBeforeBoundary != nil || comparisonWindowAfterBoundary != nil) && (comparisonSince != nil || comparisonUntil != nil))
+            || (!comparisonHelperModes.isEmpty && (comparisonSince != nil || comparisonUntil != nil)) {
             throw QueryCLIError.conflictingComparisonWindowFlags
         }
 
@@ -609,6 +642,10 @@ public struct QueryCLI: Sendable {
             compareMode = .explicitWindow(
                 QueryWindowBounds(since: comparisonSince, until: comparisonUntil)
             )
+        } else if let comparisonWindowBeforeBoundary {
+            compareMode = .windowBefore(comparisonWindowBeforeBoundary)
+        } else if let comparisonWindowAfterBoundary {
+            compareMode = .windowAfter(comparisonWindowAfterBoundary)
         } else {
             compareMode = comparisonHelperModes.first
         }

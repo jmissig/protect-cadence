@@ -40,8 +40,8 @@ Completed recently:
 
 Still open:
 - Extend `compare` beyond the first window-to-window slice only when the next shape stays obviously descriptive.
-  - `--vs-prior-window` and `--vs-same-window-last-week` now exist; later helpers can build from the current compare-mode model.
-  - Likely later helpers: multi-week weekday baselines, before/after a date, or one camera vs another camera.
+  - `--vs-prior-window`, `--vs-same-window-last-week`, `--vs-window-before`, and `--vs-window-after` now exist; later helpers can build from the current compare-mode model.
+  - Likely later helpers: multi-week weekday baselines or one camera vs another camera.
   - Preserve the current zero/empty-bucket behavior with explicit regression tests so absences remain inspectable evidence.
   - Keep it mathematical and evidence-oriented; do not add anomaly judgments.
 - Add a drill-down path from aggregate output to representative raw events so downstream tools can inspect the evidence behind a bucket.
