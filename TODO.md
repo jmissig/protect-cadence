@@ -39,22 +39,19 @@ Completed recently:
 - public count semantics now keep normalized event rows as the primary counts, with distinct source-event counts framed separately
 
 Still open:
-- Add a shared filter grammar across query commands.
-- Decide whether `recent` should stay as a narrow convenience command or evolve into canonical `events` plus a compatibility alias.
-- Add extraction-oriented filters for `kind` and `camera`.
-- Add native time-of-day filtering, including overnight ranges such as `22:00-05:00`.
-- Add a query shape for “all matching events in this time window and these hours of day”.
-- Consider named periods such as `dawn`, `day`, `dusk`, `night` if they can be defined clearly.
-- Later, only if useful, add business-hours / overnight style presets.
-- Add grouped summary bucketing beyond camera+kind only when there is a clear question behind it.
-- Likely useful buckets: `date`, `hour-of-day`, and `day-of-week`.
+- Extend `compare` beyond the first window-to-window slice only when the next shape stays obviously descriptive.
+  - Immediate next step: replace the current single-helper compare state with a real compare-mode model and add `--vs-prior-window`.
+  - Likely later helpers: same weekday across prior weeks, before/after a date, or one camera vs another camera.
+  - Preserve the current zero/empty-bucket behavior with explicit regression tests so absences remain inspectable evidence.
+  - Keep it mathematical and evidence-oriented; do not add anomaly judgments.
+- Add a drill-down path from aggregate output to representative raw events so downstream tools can inspect the evidence behind a bucket.
+  - Prefer a one-hop path from compare/summary output to the underlying `events` slice or an equivalent machine-readable drill-down descriptor.
+  - Prefer descriptor objects over raw shell-command strings, especially for grouped outputs like `date` and `hour` that current `events` flags may not express directly.
 - Add distribution-oriented summaries so downstream tools can learn rhythms rather than just totals.
   - Examples: counts by hour-of-day, day-of-week, and camera within a window.
   - Keep outputs descriptive and evidence-oriented; do not label anything normal or abnormal.
-- Extend `compare` beyond the first window-to-window slice only when the next shape stays obviously descriptive.
-  - Likely next useful helpers: same weekday across prior weeks, before/after a date, or one camera vs another camera.
-  - Keep it mathematical and evidence-oriented; do not add anomaly judgments.
-- Add a drill-down path from aggregate output to representative raw events so downstream tools can inspect the evidence behind a bucket.
+- Consider named periods such as `dawn`, `day`, `dusk`, `night` if they can be defined clearly.
+- Later, only if useful, add business-hours / overnight style presets.
 - Consider a baseline/profile-style command only if it stays mathematical, legible, and clearly simpler than doing the same work in OpenClaw.
 - Explore whether session / cluster style outputs are useful for collapsing noisy repeated detections into activity episodes.
   - If added, keep the primitive explicit, such as grouping events separated by less than an N-minute quiet gap.
@@ -68,7 +65,10 @@ These are not requests for embedded anomaly scoring. They are requests for query
   - same hour yesterday
   - same weekday across prior weeks
   - before/after a date or change
+  - prior-window comparisons
   - one camera vs another camera
+  - preserve empty / zero-result buckets when the peer slice had activity so absences are queryable evidence
+- Make it easy to move from “summary suggests something interesting” to “show me the underlying events” in one hop.
 - Make it easy to inspect shape, not just totals:
   - when a camera usually fires
   - when a given kind usually appears
@@ -76,7 +76,6 @@ These are not requests for embedded anomaly scoring. They are requests for query
 - Make it easy to collapse noisy repetition when needed:
   - adjacent rows within N minutes
   - quiet-gap sessionization for repeated detections
-- Make it easy to move from “summary suggests something interesting” to “show me the underlying events” in one hop.
 - Keep all of this descriptive. The CLI should expose evidence cleanly; OpenClaw should remain the judge of anomalies and household patterns.
 
 ### Schema and migrations

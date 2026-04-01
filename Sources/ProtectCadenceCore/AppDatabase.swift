@@ -291,11 +291,18 @@ public struct SummaryResponse: Codable, Sendable {
 
 public struct CompareRequest: Sendable {
     public let filters: QueryFilters
+    public let compareMode: CompareMode
     public let comparisonWindow: QueryWindow
     public let groupBy: [SummaryGroupBy]
 
-    public init(filters: QueryFilters, comparisonWindow: QueryWindow, groupBy: [SummaryGroupBy] = [.camera, .kind]) {
+    public init(
+        filters: QueryFilters,
+        compareMode: CompareMode,
+        comparisonWindow: QueryWindow,
+        groupBy: [SummaryGroupBy] = [.camera, .kind]
+    ) {
         self.filters = filters
+        self.compareMode = compareMode
         self.comparisonWindow = comparisonWindow
         self.groupBy = groupBy
     }

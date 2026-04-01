@@ -164,6 +164,8 @@ public enum ProtectCadenceHelp {
                                 Explicit comparison window
       --vs-same-window-yesterday
                                 Shift the primary window back by one local day
+      --vs-prior-window
+                                Use the immediately preceding equal-duration window
 
     Primary window:
       compare requires --last-hours <n> or --since <time> [--until <time>]
