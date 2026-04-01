@@ -141,6 +141,7 @@ public struct QueryWindowBounds: Sendable, Equatable {
 public enum CompareMode: Sendable, Equatable {
     case explicitWindow(QueryWindowBounds)
     case sameWindowYesterday
+    case sameWindowLastWeek
     case priorWindow
 
     public func resolveComparisonWindow(
@@ -155,6 +156,12 @@ public enum CompareMode: Sendable, Equatable {
             return try QueryWindow.shiftedByLocalDays(
                 primaryWindow,
                 days: -1,
+                calendar: calendar
+            )
+        case .sameWindowLastWeek:
+            return try QueryWindow.shiftedByLocalDays(
+                primaryWindow,
+                days: -7,
                 calendar: calendar
             )
         case .priorWindow:
@@ -240,7 +247,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
         case .conflictingWindowFlags:
             return "use either --last-hours or --since/--until, not both"
         case .conflictingComparisonWindowFlags:
-            return "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, or --vs-prior-window"
+            return "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, or --vs-prior-window"
         case .untilRequiresSince:
             return "--until requires --since"
         case .compareRequiresPrimaryWindow:
@@ -248,7 +255,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
         case .compareRequiresExplicitWindow:
             return "--vs-since requires --vs-until, and --vs-until requires --vs-since"
         case .compareMissingMode:
-            return "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, or --vs-prior-window"
+            return "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, or --vs-prior-window"
         case let .invalidWindowRange(start, end):
             return "resolved time window must have start earlier than end, got \(QueryDateParser.encode(start)) to \(QueryDateParser.encode(end))"
         }
@@ -502,6 +509,11 @@ public struct QueryCLI: Sendable {
             case "--vs-same-window-yesterday" where subcommand == .compare:
                 if !comparisonHelperModes.contains(.sameWindowYesterday) {
                     comparisonHelperModes.append(.sameWindowYesterday)
+                }
+                index += 1
+            case "--vs-same-window-last-week" where subcommand == .compare:
+                if !comparisonHelperModes.contains(.sameWindowLastWeek) {
+                    comparisonHelperModes.append(.sameWindowLastWeek)
                 }
                 index += 1
             case "--vs-prior-window" where subcommand == .compare:

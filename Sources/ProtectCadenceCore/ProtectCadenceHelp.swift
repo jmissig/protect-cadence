@@ -168,6 +168,8 @@ public enum ProtectCadenceHelp {
                                 Explicit comparison window
       --vs-same-window-yesterday
                                 Shift the primary window back by one local day
+      --vs-same-window-last-week
+                                Shift the primary window back by seven local days
       --vs-prior-window
                                 Use the immediately preceding equal-duration window
 

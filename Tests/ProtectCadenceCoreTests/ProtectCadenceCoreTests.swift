@@ -1677,6 +1677,13 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func queryCompareHelpMentionsSameWindowLastWeekMode() {
+        let help = ProtectCadenceHelp.text(for: ["query", "compare", "--help"])
+
+        #expect(help?.contains("--vs-same-window-last-week") == true)
+    }
+
+    @Test
     func queryCLIRejectsInvalidLastHours() throws {
         do {
             _ = try QueryCLI(arguments: ["summary", "--last-hours", "0"])
@@ -1779,6 +1786,11 @@ struct ProtectCadenceCoreTests {
             "--last-hours", "1",
             "--vs-same-window-yesterday",
         ])
+        let lastWeekCLI = try QueryCLI(arguments: [
+            "compare",
+            "--last-hours", "1",
+            "--vs-same-window-last-week",
+        ])
         let priorCLI = try QueryCLI(arguments: [
             "compare",
             "--last-hours", "1",
@@ -1798,6 +1810,7 @@ struct ProtectCadenceCoreTests {
         #expect(explicitCLI.groupBy == [.hour])
 
         #expect(yesterdayCLI.compareMode == .sameWindowYesterday)
+        #expect(lastWeekCLI.compareMode == .sameWindowLastWeek)
         #expect(priorCLI.compareMode == .priorWindow)
     }
 
@@ -1808,11 +1821,23 @@ struct ProtectCadenceCoreTests {
                 "compare",
                 "--last-hours", "1",
                 "--vs-same-window-yesterday",
+                "--vs-same-window-last-week",
+            ])
+            Issue.record("expected conflicting compare mode error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, or --vs-prior-window")
+        }
+
+        do {
+            _ = try QueryCLI(arguments: [
+                "compare",
+                "--last-hours", "1",
+                "--vs-same-window-last-week",
                 "--vs-prior-window",
             ])
             Issue.record("expected conflicting compare mode error")
         } catch let error as QueryCLIError {
-            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, or --vs-prior-window")
+            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, or --vs-prior-window")
         }
 
         do {
@@ -1825,7 +1850,7 @@ struct ProtectCadenceCoreTests {
             ])
             Issue.record("expected explicit/helper compare mode conflict")
         } catch let error as QueryCLIError {
-            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, or --vs-prior-window")
+            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, or --vs-prior-window")
         }
     }
 
@@ -1853,7 +1878,7 @@ struct ProtectCadenceCoreTests {
             _ = try cli.compareRequest(now: Date(timeIntervalSince1970: 0))
             Issue.record("expected missing compare mode error")
         } catch let error as QueryCLIError {
-            #expect(error.description == "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, or --vs-prior-window")
+            #expect(error.description == "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, or --vs-prior-window")
         }
     }
 
@@ -1915,6 +1940,30 @@ struct ProtectCadenceCoreTests {
             #expect(request.comparisonWindow == QueryWindow(
                 start: localDate(day: 27, hour: 6, minute: 30),
                 end: localDate(day: 27, hour: 8, minute: 0)
+            ))
+        }
+    }
+
+    @Test
+    func queryCLIResolvesSameWindowLastWeekUsingPrimaryWindowShiftedBackSevenDays() throws {
+        try withDefaultTimeZone("America/Los_Angeles") {
+            let cli = try QueryCLI(arguments: [
+                "compare",
+                "--since", "2026-03-27 08:00",
+                "--until", "2026-03-27 09:30",
+                "--vs-same-window-last-week",
+            ])
+
+            let request = try cli.compareRequest(now: Date(timeIntervalSince1970: 0))
+
+            #expect(request.compareMode == .sameWindowLastWeek)
+            #expect(request.filters.window == QueryWindow(
+                start: localDate(day: 27, hour: 8, minute: 0),
+                end: localDate(day: 27, hour: 9, minute: 30)
+            ))
+            #expect(request.comparisonWindow == QueryWindow(
+                start: localDate(day: 20, hour: 8, minute: 0),
+                end: localDate(day: 20, hour: 9, minute: 30)
             ))
         }
     }
@@ -2618,6 +2667,111 @@ struct ProtectCadenceCoreTests {
                         window: QueryWindow(
                             start: localDate(day: 27, hour: 7, minute: 0),
                             end: localDate(day: 27, hour: 8, minute: 0)
+                        ),
+                        cameras: ["Porch"],
+                        kinds: ["package"]
+                    )
+                ),
+            ])
+        case .events, .summary:
+            Issue.record("expected compare output")
+        }
+    }
+
+    @Test
+    func queryRunnerCompareSupportsSameWindowLastWeekHelperEndToEnd() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 27, hour: 8, minute: 10),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "window-driveway-person"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 20, hour: 8, minute: 10),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "last-week-driveway-person"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 20, hour: 8, minute: 40),
+                    camera: "Porch",
+                    kind: "package",
+                    eventID: "last-week-porch-package"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try ProtectCadenceQueryRunner.run(
+            arguments: [
+                "compare",
+                "--db", databasePath,
+                "--since", "2026-03-27 08:00",
+                "--until", "2026-03-27 09:00",
+                "--vs-same-window-last-week",
+            ]
+        )
+
+        switch output {
+        case let .compare(response):
+            #expect(response.filters.window == QueryWindow(
+                start: localDate(day: 27, hour: 8, minute: 0),
+                end: localDate(day: 27, hour: 9, minute: 0)
+            ))
+            #expect(response.comparisonWindow == QueryWindow(
+                start: localDate(day: 20, hour: 8, minute: 0),
+                end: localDate(day: 20, hour: 9, minute: 0)
+            ))
+            #expect(response.totals == CompareCounts(eventCount: 1, sourceEventCount: 1))
+            #expect(response.comparisonTotals == CompareCounts(eventCount: 2, sourceEventCount: 2))
+            #expect(response.totalEventCountDelta == -1)
+            #expect(response.groups == [
+                compareGroup(
+                    group: ["camera": "Driveway", "kind": "person"],
+                    window: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                    comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                    eventCountDelta: 0,
+                    sourceEventCountDelta: 0,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 20, hour: 8, minute: 0),
+                            end: localDate(day: 20, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"]
+                    )
+                ),
+                compareGroup(
+                    group: ["camera": "Porch", "kind": "package"],
+                    window: CompareCounts(eventCount: 0, sourceEventCount: 0),
+                    comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                    eventCountDelta: -1,
+                    sourceEventCountDelta: -1,
+                    windowFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 27, hour: 8, minute: 0),
+                            end: localDate(day: 27, hour: 9, minute: 0)
+                        ),
+                        cameras: ["Porch"],
+                        kinds: ["package"]
+                    ),
+                    comparisonFilters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 20, hour: 8, minute: 0),
+                            end: localDate(day: 20, hour: 9, minute: 0)
                         ),
                         cameras: ["Porch"],
                         kinds: ["package"]

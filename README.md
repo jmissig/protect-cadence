@@ -95,8 +95,10 @@ protect-cadence query summary --group-by date --group-by kind
 protect-cadence query summary --weekday --group-by weekday --group-by hour
 
 protect-cadence query compare --last-hours 1 --vs-same-window-yesterday
+protect-cadence query compare --last-hours 1 --vs-same-window-last-week
 protect-cadence query compare --last-hours 1 --vs-prior-window
 protect-cadence query compare --since 2026-03-27 08:00 --until 2026-03-27 09:00 --vs-since 2026-03-26 08:00 --vs-until 2026-03-26 09:00
+protect-cadence query compare --since 2026-03-27 08:00 --until 2026-03-27 09:00 --vs-same-window-last-week
 protect-cadence query compare --since 2026-03-27T00:00:00Z --until 2026-03-28T00:00:00Z --vs-same-window-yesterday --group-by date --group-by kind
 ```
 
@@ -105,7 +107,7 @@ Notes:
 - `query events` defaults to `--limit 50`
 - `query summary` defaults to the last `24` hours
 - `query compare` requires a primary window via `--last-hours` or `--since`/`--until`
-- `query compare` supports exactly one compare mode: an explicit comparison window via `--vs-since` + `--vs-until`, `--vs-same-window-yesterday`, or `--vs-prior-window`
+- `query compare` supports exactly one compare mode: an explicit comparison window via `--vs-since` + `--vs-until`, `--vs-same-window-yesterday`, `--vs-same-window-last-week`, or `--vs-prior-window`
 - `--since` and `--until` are the public explicit bounds
 - `--since` alone resolves to a window ending at `now`
 - `--until` requires `--since`
