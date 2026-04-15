@@ -26,7 +26,7 @@ struct ProtectCadenceDatabasePathOptions: ParsableArguments {
 struct ProtectCadenceModelDatabasePathOptions: ParsableArguments {
     @Option(
         name: .customLong("model-db"),
-        help: "Override derived model SQLite path for this run."
+        help: "Override where the cadence-pattern model is stored for this run."
     )
     var modelDatabasePathOverride: String?
 }
@@ -333,7 +333,15 @@ public struct ProtectCadenceCLIQueryCommand: AsyncParsableCommand {
 public struct ProtectCadenceCLIModelCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "model",
-        abstract: "Build and inspect the derived cadence-model database.",
+        abstract: "Build and inspect a model of event cadence patterns.",
+        discussion: """
+        Use this to summarize what tends to happen on each camera, then inspect modeled episodes or attention findings that may deserve a closer look.
+
+        Examples:
+          protect-cadence model rebuild
+          protect-cadence model findings --last-hours 24
+          protect-cadence model episodes --camera Driveway --since 2026-04-14T00:00:00Z
+        """,
         subcommands: [
             ProtectCadenceCLIModelRebuildCommand.self,
             ProtectCadenceCLIModelEpisodesCommand.self,
@@ -347,7 +355,7 @@ public struct ProtectCadenceCLIModelCommand: AsyncParsableCommand {
 public struct ProtectCadenceCLIModelRebuildCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rebuild",
-        abstract: "Rebuild modeled episodes, bucket stats, and findings from the evidence DB."
+        abstract: "Rebuild the event-cadence model from the evidence database."
     )
 
     @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions
@@ -366,7 +374,7 @@ public struct ProtectCadenceCLIModelRebuildCommand: AsyncParsableCommand {
 public struct ProtectCadenceCLIModelEpisodesCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "episodes",
-        abstract: "Read deterministic modeled episodes from the derived model DB."
+        abstract: "Inspect modeled detection episodes from the cadence patterns model."
     )
 
     @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions
@@ -375,10 +383,10 @@ public struct ProtectCadenceCLIModelEpisodesCommand: AsyncParsableCommand {
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceModelFilterOptions
 
-    @Option(name: .customLong("limit"), help: "Row limit. Default 50.")
+    @Option(name: .customLong("limit"), help: "Maximum episodes to return. Default 50.")
     var limit = 50
 
-    @Option(name: .customLong("order"), help: "Row order: newest or oldest.")
+    @Option(name: .customLong("order"), help: "Episode order: newest or oldest.")
     var order = "newest"
 
     public init() {}
@@ -393,7 +401,7 @@ public struct ProtectCadenceCLIModelEpisodesCommand: AsyncParsableCommand {
 public struct ProtectCadenceCLIModelFindingsCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "findings",
-        abstract: "Read first-pass attention findings from the derived model DB."
+        abstract: "Inspect attention findings from the cadence patterns model."
     )
 
     @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions
@@ -408,7 +416,7 @@ public struct ProtectCadenceCLIModelFindingsCommand: AsyncParsableCommand {
     )
     var findingTypes: [String] = []
 
-    @Option(name: .customLong("limit"), help: "Row limit. Default 50.")
+    @Option(name: .customLong("limit"), help: "Maximum findings to return. Default 50.")
     var limit = 50
 
     public init() {}

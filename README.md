@@ -7,9 +7,9 @@ It is built around two normal tasks:
 - ingest recent Protect events into SQLite
 - query events, grouped summaries, or window-to-window comparisons
 
-It now also has a small derived modeling pass:
+It now also has a small cadence-patterns pass:
 
-- rebuild deterministic single-camera episodes into a separate sibling SQLite database
+- build a simple model of what detection patterns tend to look like on each camera
 - inspect modeled episodes and first-pass attention findings without changing the evidence DB
 
 ## Install
@@ -170,16 +170,36 @@ protect-cadence validate --last-hours 6 --write-api-snapshot-dir /tmp/protect-sa
 
 If `--write-api-snapshot-dir` is provided, the fetched sample is also written through the existing sanitizer/snapshot helper.
 
-## Cadence Modeling
+## Cadence patterns model
 
-The modeling layer is a separate derived artifact. It reads from the evidence database and writes a sibling model database by default.
+If the raw event table tells you what happened, the cadence patterns model is the first pass at telling you what usually happens around here and what might deserve a closer look.
 
-Current model commands:
+Use it when you want to answer questions like:
+
+- what patterns seem routine on this camera?
+- what detections look structurally unusual for this time of day?
+- what long-running detection episodes stand out from the usual cadence?
+- what transitions between states happened at an unusual time?
+
+The model is derived from the evidence database. The source-of-truth remains `protect-cadence.sqlite`, and the cadence-patterns data is rebuilt into a separate sibling `*-model.sqlite` file by default.
+
+A typical flow looks like this:
 
 ```bash
 protect-cadence model rebuild
-protect-cadence model rebuild --db /path/to/protect-cadence.sqlite --model-db /path/to/protect-cadence-model.sqlite
+protect-cadence model findings --last-hours 24
+protect-cadence model episodes --camera Driveway --since 2026-04-14T00:00:00Z
+```
 
+You can also point both databases explicitly:
+
+```bash
+protect-cadence model rebuild --db /path/to/protect-cadence.sqlite --model-db /path/to/protect-cadence-model.sqlite
+```
+
+To inspect the model:
+
+```bash
 protect-cadence model episodes
 protect-cadence model episodes --limit 20 --order oldest
 protect-cadence model episodes --camera Driveway --kind person
@@ -192,20 +212,13 @@ protect-cadence model findings --finding-type unusual_duration --camera Driveway
 protect-cadence model findings --last-hours 24
 ```
 
-Current rebuild behavior:
+What you can inspect today:
 
-- source-of-truth remains `protect-cadence.sqlite`
-- derived output goes to a sibling `*-model.sqlite` file by default
-- episodes are clustered per camera with a fixed 5-minute quiet gap
-- state keys are `camera:primary_kind`
-- bucket stats are grouped by local hour-of-day plus `weekday` or `weekend`
-- transition stats are grouped by `from_state -> to_state` plus the observed episode's local hour-of-day and `weekday` or `weekend`
-- current finding types are `unexpected_presence`, `unexpected_transition`, and `unusual_duration`
-- `unexpected_transition` currently flags rare time-bucketed occurrences of otherwise repeated same-camera state transitions
-- `unusual_duration` currently only flags longer-than-usual episodes, not shorter ones
-- rebuild responses include `rebuildDurationSeconds` so it is easy to see when full rebuild cost starts becoming an operator problem
+- modeled detection episodes, filtered by time, camera, kind, or state key
+- attention findings for things like unexpected presence, unusual transitions, or longer-than-usual episodes
+- rebuild output that tells you how much source data was modeled and how long the rebuild took
 
-The model DB is intended to be rebuildable. There is no incremental refresh or background service in this version.
+For the current modeling rules and design details, see `Docs/cadence-modeling-layer.md`.
 
 For full command help:
 
