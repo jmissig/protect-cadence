@@ -78,6 +78,37 @@ These are not requests for embedded anomaly scoring. They are requests for query
   - quiet-gap sessionization for repeated detections
 - Keep all of this descriptive. The CLI should expose evidence cleanly; OpenClaw should remain the judge of anomalies and household patterns.
 
+### Cadence modeling layer
+
+See `Docs/cadence-modeling-layer.md`.
+
+Near-term direction:
+- treat the modeling layer as a separate derived artifact, preferably a parallel SQLite database
+- keep `protect-cadence` as the source evidence store, with modeled state rebuildable from cadence events
+- start with deterministic episode clustering before adding more ambitious sequence modeling
+- add simple time-conditioned state frequency and transition statistics before attempting more elaborate anomaly methods
+- emit descriptive attention findings for OpenClaw to interpret, not final anomaly judgments
+- preserve one-hop drill-down from attention findings back to episodes and source events
+
+First implementation slice:
+Completed on 2026-04-14:
+- `protect-cadence model rebuild` now rebuilds a separate sibling model SQLite database from the evidence DB
+- deterministic episode clustering now materializes `episodes`, `episode_events`, and `episode_kinds`
+- the first state vocabulary is `camera:primary_kind`
+- first-pass `state_bucket_stats` now bucket by local hour-of-day plus `weekday` / `weekend`
+- `state_transition_stats` now materialize same-camera consecutive `from_state -> to_state` transition counts plus simple gap summaries
+- `protect-cadence model episodes` and `protect-cadence model findings` now expose modeled episodes plus first-pass `unexpected_presence`, `unexpected_transition`, and `unusual_duration` findings
+- `unexpected_transition` currently only covers rare time-bucketed occurrences of otherwise repeated transition pairs
+
+Still open:
+- add absence-style findings only after the current episode/state layer proves useful
+- decide whether transition findings should later account for exact transition timing or stronger source-state expectations beyond the current repeated-pair bucket rarity check
+- decide whether `unusual_duration` should remain long-only or broaden to shorter-than-usual episodes later
+- add a small stats/query surface for inspecting `state_bucket_stats` directly if downstream tools ask for it
+- add a small stats/query surface for inspecting `state_transition_stats` directly if downstream tools ask for it
+- decide whether model rebuilds should eventually accept explicit training/scoring windows instead of using the full evidence DB
+- keep the model database rebuild-only for now; do not add incremental refresh machinery until there is real operator pressure
+
 ### Schema and migrations
 
 - Keep the base table as tall event rows unless real query pressure says otherwise.

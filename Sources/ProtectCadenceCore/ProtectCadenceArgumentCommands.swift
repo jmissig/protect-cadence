@@ -23,6 +23,14 @@ struct ProtectCadenceDatabasePathOptions: ParsableArguments {
     var databasePathOverride: String?
 }
 
+struct ProtectCadenceModelDatabasePathOptions: ParsableArguments {
+    @Option(
+        name: .customLong("model-db"),
+        help: "Override derived model SQLite path for this run."
+    )
+    var modelDatabasePathOverride: String?
+}
+
 struct ProtectCadenceAuthOverrideOptions: ParsableArguments {
     @Option(
         name: .customLong("controller-url"),
@@ -163,6 +171,26 @@ struct ProtectCadenceCompareModeOptions: ParsableArguments {
     var priorWindow = false
 }
 
+struct ProtectCadenceModelFilterOptions: ParsableArguments {
+    @Option(
+        name: .customLong("camera"),
+        help: "Repeatable episode camera filter."
+    )
+    var cameras: [String] = []
+
+    @Option(
+        name: .customLong("kind"),
+        help: "Repeatable primary-kind filter."
+    )
+    var kinds: [String] = []
+
+    @Option(
+        name: .customLong("state-key"),
+        help: "Repeatable state-key filter."
+    )
+    var stateKeys: [String] = []
+}
+
 public struct ProtectCadenceCLICommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "protect-cadence",
@@ -174,10 +202,14 @@ public struct ProtectCadenceCLICommand: AsyncParsableCommand {
           protect-cadence ingest --last-hours 6
           protect-cadence query events --last-hours 2 --camera Driveway
           protect-cadence query compare --last-hours 1 --vs-prior-window
+          protect-cadence model rebuild
+          protect-cadence model findings --finding-type unexpected_presence
+          protect-cadence model findings --finding-type unexpected_transition
         """,
         subcommands: [
             ProtectCadenceCLIIngestCommand.self,
             ProtectCadenceCLIQueryCommand.self,
+            ProtectCadenceCLIModelCommand.self,
             ProtectCadenceCLIAuthCommand.self,
             ProtectCadenceCLIValidateCommand.self,
         ]
@@ -296,6 +328,96 @@ public struct ProtectCadenceCLIQueryCommand: AsyncParsableCommand {
     )
 
     public init() {}
+}
+
+public struct ProtectCadenceCLIModelCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "model",
+        abstract: "Build and inspect the derived cadence-model database.",
+        subcommands: [
+            ProtectCadenceCLIModelRebuildCommand.self,
+            ProtectCadenceCLIModelEpisodesCommand.self,
+            ProtectCadenceCLIModelFindingsCommand.self,
+        ]
+    )
+
+    public init() {}
+}
+
+public struct ProtectCadenceCLIModelRebuildCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "rebuild",
+        abstract: "Rebuild modeled episodes, bucket stats, and findings from the evidence DB."
+    )
+
+    @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions
+    @OptionGroup var modelDatabaseOptions: ProtectCadenceModelDatabasePathOptions
+    @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
+
+    public init() {}
+
+    public mutating func run() async throws {
+        try ProtectCadenceCLIPrinter.printJSON(
+            try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))
+        )
+    }
+}
+
+public struct ProtectCadenceCLIModelEpisodesCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "episodes",
+        abstract: "Read deterministic modeled episodes from the derived model DB."
+    )
+
+    @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions
+    @OptionGroup var modelDatabaseOptions: ProtectCadenceModelDatabasePathOptions
+    @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
+    @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
+    @OptionGroup var filters: ProtectCadenceModelFilterOptions
+
+    @Option(name: .customLong("limit"), help: "Row limit. Default 50.")
+    var limit = 50
+
+    @Option(name: .customLong("order"), help: "Row order: newest or oldest.")
+    var order = "newest"
+
+    public init() {}
+
+    public mutating func run() async throws {
+        try ProtectCadenceCLIPrinter.printJSON(
+            try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))
+        )
+    }
+}
+
+public struct ProtectCadenceCLIModelFindingsCommand: AsyncParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "findings",
+        abstract: "Read first-pass attention findings from the derived model DB."
+    )
+
+    @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions
+    @OptionGroup var modelDatabaseOptions: ProtectCadenceModelDatabasePathOptions
+    @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
+    @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
+    @OptionGroup var filters: ProtectCadenceModelFilterOptions
+
+    @Option(
+        name: .customLong("finding-type"),
+        help: "Repeatable finding-type filter: unexpected_presence, unexpected_transition, or unusual_duration."
+    )
+    var findingTypes: [String] = []
+
+    @Option(name: .customLong("limit"), help: "Row limit. Default 50.")
+    var limit = 50
+
+    public init() {}
+
+    public mutating func run() async throws {
+        try ProtectCadenceCLIPrinter.printJSON(
+            try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))
+        )
+    }
 }
 
 public struct ProtectCadenceCLIQueryEventsCommand: AsyncParsableCommand {

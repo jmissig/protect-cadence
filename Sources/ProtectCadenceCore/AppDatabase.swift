@@ -4,6 +4,7 @@ import GRDB
 public enum ProtectCadenceCommand: String, Sendable {
     case ingest = "protect-cadence ingest"
     case query = "protect-cadence query"
+    case model = "protect-cadence model"
     case auth = "protect-cadence auth"
     case validate = "protect-cadence validate"
 }
@@ -51,6 +52,35 @@ public struct ProtectCadencePaths: Sendable {
             .appendingPathComponent("protect-cadence.sqlite")
             .path
     }
+
+    public static func defaultManagedModelDatabasePath(
+        fileManager: FileManager = .default,
+        homeDirectoryURL: URL? = nil
+    ) -> String {
+        defaultSupportDirectory(fileManager: fileManager, homeDirectoryURL: homeDirectoryURL)
+            .appendingPathComponent("protect-cadence-model.sqlite")
+            .path
+    }
+
+    public static func siblingModelDatabasePath(for sourceDatabasePath: String) -> String {
+        let sourceURL = URL(fileURLWithPath: sourceDatabasePath)
+        let directoryURL = sourceURL.deletingLastPathComponent()
+        let fileName = sourceURL.lastPathComponent
+
+        if fileName == "protect-cadence.sqlite" {
+            return directoryURL.appendingPathComponent("protect-cadence-model.sqlite").path
+        }
+
+        let fileExtension = sourceURL.pathExtension
+        let baseName = fileExtension.isEmpty
+            ? fileName
+            : String(fileName.dropLast(fileExtension.count + 1))
+        let modelFileName = fileExtension.isEmpty
+            ? "\(baseName)-model.sqlite"
+            : "\(baseName)-model.\(fileExtension)"
+
+        return directoryURL.appendingPathComponent(modelFileName).path
+    }
 }
 
 public enum ProtectCadenceDatabasePathResolver {
@@ -73,6 +103,36 @@ public enum ProtectCadenceDatabasePathResolver {
             }
             return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? nil
+    }
+}
+
+public enum ProtectCadenceModelDatabasePathResolver {
+    public static func resolve(
+        explicitModelOverride: String?,
+        sourceDatabaseOverride: String?,
+        configPath: String = ProtectCadencePaths.defaultConfigPath(),
+        fileManager: FileManager = .default,
+        homeDirectoryURL: URL? = nil
+    ) throws -> String {
+        if let explicitModelOverride, !explicitModelOverride.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return explicitModelOverride
+        }
+
+        let sourceDatabasePath = try ProtectCadenceDatabasePathResolver.resolve(
+            explicitOverride: sourceDatabaseOverride,
+            configPath: configPath
+        )
+        let siblingPath = ProtectCadencePaths.siblingModelDatabasePath(for: sourceDatabasePath)
+        let siblingDirectoryPath = URL(fileURLWithPath: siblingPath).deletingLastPathComponent().path
+
+        if fileManager.fileExists(atPath: siblingDirectoryPath), fileManager.isWritableFile(atPath: siblingDirectoryPath) {
+            return siblingPath
+        }
+
+        return ProtectCadencePaths.defaultManagedModelDatabasePath(
+            fileManager: fileManager,
+            homeDirectoryURL: homeDirectoryURL
+        )
     }
 }
 
@@ -504,6 +564,33 @@ public final class ProtectCadenceDatabase {
                     LIMIT ?
                     """,
                 arguments: arguments
+            )
+        }
+    }
+
+    public func fetchAllEvents(
+        order: EventOrder = .oldest,
+        filters: QueryFilters = QueryFilters()
+    ) throws -> [EventRow] {
+        try dbQueue.read { db in
+            let whereClause = try eventWhereClause(for: filters)
+            let orderClause: String
+            switch order {
+            case .newest:
+                orderClause = "time_start DESC, id DESC"
+            case .oldest:
+                orderClause = "camera ASC, time_start ASC, COALESCE(time_end, time_start) ASC, kind ASC, id ASC"
+            }
+
+            return try EventRow.fetchAll(
+                db,
+                sql: """
+                    SELECT *
+                    FROM \(EventRow.databaseTableName)
+                    \(whereClause.sql)
+                    ORDER BY \(orderClause)
+                    """,
+                arguments: whereClause.arguments
             )
         }
     }

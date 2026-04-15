@@ -197,6 +197,22 @@ Rationale:
 - downstream queries often need local household views like “weekday mornings” or “after 22:00”, so local-time interpretation belongs in the query layer
 - unlike `clime`, this project does not need to preserve the exact emitted timestamp string plus offset as a first-class artifact of record
 
+## Testing and operator-safety rules
+
+For this repo, prefer repo-local or explicitly sandboxed verification.
+
+- Do not treat the globally installed `protect-cadence` binary as the test target.
+- Do not run `make install` or other install/publish steps as part of routine verification.
+- Do not rely on ambient default config or database paths for tests.
+- Prefer explicit `--db`, `--model-db`, and `--config` paths, ideally temp files, fixtures, or other repo-scoped scratch locations.
+- Assume the default configured database may be shared with another human or process.
+- If checking default-path behavior intentionally, treat that as a narrow compatibility test, not the normal smoke-test path.
+
+Rationale:
+- this project may have multiple real users on the same machine
+- the default configured database location may be intentionally readable but not writable by this agent
+- repo validation should avoid mutating shared operator state
+
 ## CLI Direction
 
 The CLI is the main user and agent interface.

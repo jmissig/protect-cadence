@@ -15,6 +15,14 @@ public enum ProtectCadenceHelp {
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIValidateCommand.self)
         case ["query"]:
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIQueryCommand.self)
+        case ["model"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIModelCommand.self)
+        case ["model", "rebuild"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIModelRebuildCommand.self)
+        case ["model", "episodes"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIModelEpisodesCommand.self)
+        case ["model", "findings"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIModelFindingsCommand.self)
         case ["query", "events"]:
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIQueryEventsCommand.self)
         case ["query", "summary"]:

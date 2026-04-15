@@ -7,6 +7,11 @@ It is built around two normal tasks:
 - ingest recent Protect events into SQLite
 - query events, grouped summaries, or window-to-window comparisons
 
+It now also has a small derived modeling pass:
+
+- rebuild deterministic single-camera episodes into a separate sibling SQLite database
+- inspect modeled episodes and first-pass attention findings without changing the evidence DB
+
 ## Install
 
 Build and install the binary:
@@ -44,6 +49,7 @@ The default managed paths are:
 
 - config: `~/Library/Application Support/protect-cadence/config.json`
 - database: `~/Library/Application Support/protect-cadence/protect-cadence.sqlite`
+- model database: `~/Library/Application Support/protect-cadence/protect-cadence-model.sqlite`
 
 After setup, the usual ingest command is:
 
@@ -164,6 +170,43 @@ protect-cadence validate --last-hours 6 --write-api-snapshot-dir /tmp/protect-sa
 
 If `--write-api-snapshot-dir` is provided, the fetched sample is also written through the existing sanitizer/snapshot helper.
 
+## Cadence Modeling
+
+The modeling layer is a separate derived artifact. It reads from the evidence database and writes a sibling model database by default.
+
+Current model commands:
+
+```bash
+protect-cadence model rebuild
+protect-cadence model rebuild --db /path/to/protect-cadence.sqlite --model-db /path/to/protect-cadence-model.sqlite
+
+protect-cadence model episodes
+protect-cadence model episodes --limit 20 --order oldest
+protect-cadence model episodes --camera Driveway --kind person
+protect-cadence model episodes --state-key "Driveway:person" --since 2026-04-14T00:00:00Z
+
+protect-cadence model findings
+protect-cadence model findings --finding-type unexpected_presence
+protect-cadence model findings --finding-type unexpected_transition
+protect-cadence model findings --finding-type unusual_duration --camera Driveway
+protect-cadence model findings --last-hours 24
+```
+
+Current rebuild behavior:
+
+- source-of-truth remains `protect-cadence.sqlite`
+- derived output goes to a sibling `*-model.sqlite` file by default
+- episodes are clustered per camera with a fixed 5-minute quiet gap
+- state keys are `camera:primary_kind`
+- bucket stats are grouped by local hour-of-day plus `weekday` or `weekend`
+- transition stats are grouped by `from_state -> to_state` plus the observed episode's local hour-of-day and `weekday` or `weekend`
+- current finding types are `unexpected_presence`, `unexpected_transition`, and `unusual_duration`
+- `unexpected_transition` currently flags rare time-bucketed occurrences of otherwise repeated same-camera state transitions
+- `unusual_duration` currently only flags longer-than-usual episodes, not shorter ones
+- rebuild responses include `rebuildDurationSeconds` so it is easy to see when full rebuild cost starts becoming an operator problem
+
+The model DB is intended to be rebuildable. There is no incremental refresh or background service in this version.
+
 For full command help:
 
 ```bash
@@ -171,6 +214,7 @@ protect-cadence --help
 protect-cadence ingest --help
 protect-cadence validate --help
 protect-cadence query --help
+protect-cadence model --help
 protect-cadence auth --help
 ```
 

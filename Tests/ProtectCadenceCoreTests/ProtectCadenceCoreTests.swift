@@ -287,6 +287,40 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func modelDatabasePathResolverPrefersExplicitThenWritableSiblingThenManagedFallback() throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        let writableDirectory = temporaryDirectoryPath()
+        let writableSourcePath = writableDirectory + "/protect-cadence.sqlite"
+        try ProtectCadenceConfigStore.save(
+            ProtectCadenceConfig(databasePath: writableSourcePath),
+            to: configPath
+        )
+
+        let explicit = try ProtectCadenceModelDatabasePathResolver.resolve(
+            explicitModelOverride: "/tmp/explicit-model.sqlite",
+            sourceDatabaseOverride: nil,
+            configPath: configPath,
+            homeDirectoryURL: URL(fileURLWithPath: "/tmp/test-home", isDirectory: true)
+        )
+        let writableSibling = try ProtectCadenceModelDatabasePathResolver.resolve(
+            explicitModelOverride: nil,
+            sourceDatabaseOverride: nil,
+            configPath: configPath,
+            homeDirectoryURL: URL(fileURLWithPath: "/tmp/test-home", isDirectory: true)
+        )
+        let managedFallback = try ProtectCadenceModelDatabasePathResolver.resolve(
+            explicitModelOverride: nil,
+            sourceDatabaseOverride: "/definitely-missing-parent/protect-cadence.sqlite",
+            configPath: configPath,
+            homeDirectoryURL: URL(fileURLWithPath: "/tmp/test-home", isDirectory: true)
+        )
+
+        #expect(explicit == "/tmp/explicit-model.sqlite")
+        #expect(writableSibling == writableDirectory + "/protect-cadence-model.sqlite")
+        #expect(managedFallback == "/tmp/test-home/Library/Application Support/protect-cadence/protect-cadence-model.sqlite")
+    }
+
+    @Test
     func configIgnoresLegacyNestedIngestDatabasePath() throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
         try """
@@ -1416,7 +1450,7 @@ struct ProtectCadenceCoreTests {
             case .events, .compare:
                 Issue.record("expected summary output")
             }
-        case .ingest, .auth, .validate:
+        case .ingest, .model, .auth, .validate:
             Issue.record("expected query output")
         }
     }
@@ -1439,7 +1473,7 @@ struct ProtectCadenceCoreTests {
             #expect(response.fetchedSourceEventCount == 5)
             #expect(response.normalizedEventCount == 5)
             #expect(response.insertedEventCount == 5)
-        case .query, .auth, .validate:
+        case .query, .model, .auth, .validate:
             Issue.record("expected ingest output")
         }
     }
@@ -1469,7 +1503,7 @@ struct ProtectCadenceCoreTests {
             #expect(response.command == "protect-cadence auth")
             #expect(response.action == "status")
             #expect(response.status == "ok")
-        case .ingest, .query, .validate:
+        case .ingest, .query, .model, .validate:
             Issue.record("expected auth output")
         }
     }
