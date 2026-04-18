@@ -11,23 +11,6 @@ The product shape is intentionally narrow:
 
 It is not a dashboard, clip browser, or general Protect SDK.
 
-## Build And Test
-
-Prefer repo-local build and test commands.
-
-```bash
-swift build --build-path build --product protect-cadence
-swift test --disable-sandbox --build-path build
-```
-
-The executable will be at:
-
-```bash
-./build/debug/protect-cadence
-```
-
-`make build`, `make test`, and `make release` are thin wrappers around the same repo-local SwiftPM workflow. Routine verification should stay repo-local; do not rely on an installed binary or shared default database paths.
-
 ## First Run
 
 The normal first run is interactive:
@@ -161,28 +144,9 @@ protect-cadence ingest \
   --camera-json Tests/Fixtures/ProtectAPI/cameras-response.json
 ```
 
-## Validation And Snapshots
-
-`validate` fetches a bounded recent sample without writing to the evidence DB and summarizes current controller assumptions:
-
-```bash
-protect-cadence validate
-protect-cadence validate --last-hours 12 --sample-limit 20
-protect-cadence validate --last-hours 6 --write-api-snapshot-dir /tmp/protect-sample
-```
-
-It checks:
-
-- how `timeStart` is chosen from live payloads
-- how many events are settled versus open
-- whether the current dedupe key collides on recent data
-- compact examples for manual inspection
-
-If `--write-api-snapshot-dir` is supplied, the sample is sanitized and written through the same fixture snapshot helper used by tests.
-
 ## Derived Model Database
 
-The evidence DB stays authoritative. The model layer is a separate rebuildable artifact.
+All imported Protect events are stored in the main evidence database. Any model outputs are derived from that data and can be rebuilt whenever needed.
 
 Typical flow:
 
@@ -226,3 +190,8 @@ protect-cadence model --help
 protect-cadence auth --help
 protect-cadence validate --help
 ```
+
+---
+
+Made with Codex and OpenClaw.
+

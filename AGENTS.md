@@ -201,6 +201,21 @@ Rationale:
 
 For this repo, prefer repo-local or explicitly sandboxed verification.
 
+Preferred routine commands:
+
+```bash
+swift build --build-path build --product protect-cadence
+swift test --disable-sandbox --build-path build
+```
+
+The repo-local executable path is:
+
+```bash
+./build/debug/protect-cadence
+```
+
+`make build`, `make test`, and `make release` are thin wrappers around the same repo-local SwiftPM workflow.
+
 - Do not treat the globally installed `protect-cadence` binary as the test target.
 - Do not run `make install` or other install/publish steps as part of routine verification.
 - Do not rely on ambient default config or database paths for tests.
@@ -217,10 +232,16 @@ Rationale:
 
 The CLI is the main user and agent interface.
 
-Current commands:
-- `protect-cadence-ingest`
-- `protect-cadence-query recent`
-- `protect-cadence-query summary`
+Current and near-current commands:
+- `protect-cadence ingest`
+- `protect-cadence query events`
+- `protect-cadence query summary`
+- `protect-cadence query compare`
+- `protect-cadence model rebuild`
+- `protect-cadence model episodes`
+- `protect-cadence model findings`
+- `protect-cadence auth status`
+- `protect-cadence validate`
 
 Likely next query direction:
 - keep the command set small
@@ -242,6 +263,14 @@ Output guidance:
 - avoid dumping raw payloads unless explicitly requested
 - optimize for extracting relevant observations rather than narrating conclusions
 - include the effective filters and counting semantics in the response shape
+
+`validate` is an operator and agent-facing verification tool. It should fetch a bounded recent sample without writing to the evidence DB and summarize current controller assumptions. Useful checks include:
+- how `timeStart` is chosen from live payloads
+- how many events are settled versus open
+- whether the current dedupe key collides on recent data
+- compact examples for manual inspection
+
+If `--write-api-snapshot-dir` is supplied, the sample should be sanitized and written through the same fixture snapshot helper used by tests.
 
 The CLI should help OpenClaw pull the right evidence quickly. It should not decide by itself whether a pattern is unusual, normal, or meaningful.
 
