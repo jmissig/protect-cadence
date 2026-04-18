@@ -110,7 +110,7 @@ struct ProtectCadenceQueryFilterOptions: ParsableArguments {
 
     @Option(
         name: .customLong("date"),
-        help: "Exact local calendar-date bucket filter."
+        help: "Exact local calendar-date bucket filter. Without an explicit window, resolves that full local day."
     )
     var date: String?
 

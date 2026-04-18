@@ -1993,7 +1993,7 @@ struct ProtectCadenceCoreTests {
             _ = try cli.compareRequest(now: Date(timeIntervalSince1970: 0))
             Issue.record("expected missing primary window error")
         } catch let error as QueryCLIError {
-            #expect(error.description == "compare requires a primary window via --last-hours or --since/--until")
+            #expect(error.description == "compare requires a primary window via --last-hours or --since [--until]")
         }
     }
 
@@ -2142,6 +2142,30 @@ struct ProtectCadenceCoreTests {
                 start: localDate(day: 27, hour: 0, minute: 0),
                 end: localDate(day: 28, hour: 0, minute: 0)
             ))
+        }
+    }
+
+    @Test
+    func queryCLIResolvesDateFilterWithoutExplicitWindowToFullLocalDay() throws {
+        try withDefaultTimeZone("America/Los_Angeles") {
+            let now = localDate(day: 28, hour: 12, minute: 0)
+            let expectedWindow = QueryWindow(
+                start: localDate(day: 27, hour: 0, minute: 0),
+                end: localDate(day: 28, hour: 0, minute: 0)
+            )
+
+            let eventsRequest = try QueryCLI(arguments: [
+                "events",
+                "--date", "2026-03-27",
+            ]).eventsRequest(now: now)
+
+            let summaryRequest = try QueryCLI(arguments: [
+                "summary",
+                "--date", "2026-03-27",
+            ]).summaryRequest(now: now)
+
+            #expect(eventsRequest.filters.window == expectedWindow)
+            #expect(summaryRequest.filters.window == expectedWindow)
         }
     }
 
@@ -2389,6 +2413,75 @@ struct ProtectCadenceCoreTests {
             #expect(response.events.map(\.eventID) == ["recent-event"])
         case .summary, .compare:
             Issue.record("expected events output")
+        }
+    }
+
+    @Test
+    func queryRunnerSummaryUsesFullLocalDayForDateWithoutExplicitWindow() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 1, minute: 15),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "day-start"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 23, minute: 10),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "day-end"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 26, hour: 1, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "next-day"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try withDefaultTimeZone("America/Los_Angeles") {
+            try ProtectCadenceQueryRunner.run(
+                arguments: [
+                    "summary",
+                    "--db", databasePath,
+                    "--date", "2026-03-25",
+                ],
+                now: localDate(day: 26, hour: 12, minute: 0)
+            )
+        }
+
+        switch output {
+        case let .summary(response):
+            #expect(response.filters.window == QueryWindow(
+                start: localDate(day: 25, hour: 0, minute: 0),
+                end: localDate(day: 26, hour: 0, minute: 0)
+            ))
+            #expect(response.totalEventCount == 2)
+            #expect(response.totalSourceEventCount == 2)
+            #expect(response.groups == [
+                summaryGroup(
+                    group: ["camera": "Driveway", "kind": "person"],
+                    eventCount: 2,
+                    sourceEventCount: 2,
+                    filters: QueryFilters(
+                        window: QueryWindow(
+                            start: localDate(day: 25, hour: 0, minute: 0),
+                            end: localDate(day: 26, hour: 0, minute: 0)
+                        ),
+                        cameras: ["Driveway"],
+                        kinds: ["person"],
+                        date: "2026-03-25"
+                    )
+                ),
+            ])
+        case .events, .compare:
+            Issue.record("expected summary output")
         }
     }
 

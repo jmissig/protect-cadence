@@ -265,7 +265,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
         case .untilRequiresSince:
             return "--until requires --since"
         case .compareRequiresPrimaryWindow:
-            return "compare requires a primary window via --last-hours or --since/--until"
+            return "compare requires a primary window via --last-hours or --since [--until]"
         case .compareRequiresExplicitWindow:
             return "--vs-since requires --vs-until, and --vs-until requires --vs-since"
         case .compareMissingMode:
@@ -587,41 +587,39 @@ public struct QueryCLI: Sendable {
 
     private func resolvedFilters(now: Date, defaultLastHours: Int? = nil) throws -> QueryFilters {
         if let windowBounds {
-            return QueryFilters(
-                window: try windowBounds.resolve(now: now),
-                cameras: filters.cameras,
-                kinds: filters.kinds,
-                weekdays: filters.weekdays,
-                timeOfDay: filters.timeOfDay,
-                date: filters.date,
-                hour: filters.hour
-            )
+            return filtersWithWindow(try windowBounds.resolve(now: now))
         }
 
         if let lastHours {
-            return QueryFilters(
-                window: QueryWindow(
+            return filtersWithWindow(
+                QueryWindow(
                     start: now.addingTimeInterval(-Double(lastHours) * 60 * 60),
                     end: now
-                ),
-                cameras: filters.cameras,
-                kinds: filters.kinds,
-                weekdays: filters.weekdays,
-                timeOfDay: filters.timeOfDay,
-                date: filters.date,
-                hour: filters.hour
+                )
             )
+        }
+
+        if let date = filters.date,
+           let localCalendarDayWindow = Self.localCalendarDayWindow(for: date)
+        {
+            return filtersWithWindow(localCalendarDayWindow)
         }
 
         guard let defaultLastHours else {
             return filters
         }
 
-        return QueryFilters(
-            window: QueryWindow(
+        return filtersWithWindow(
+            QueryWindow(
                 start: now.addingTimeInterval(-Double(defaultLastHours) * 60 * 60),
                 end: now
-            ),
+            )
+        )
+    }
+
+    private func filtersWithWindow(_ window: QueryWindow) -> QueryFilters {
+        QueryFilters(
+            window: window,
             cameras: filters.cameras,
             kinds: filters.kinds,
             weekdays: filters.weekdays,
@@ -800,7 +798,27 @@ public struct QueryCLI: Sendable {
         return (hour, minute)
     }
 
-    private static func isValidLocalDateBucket(_ rawValue: String) -> Bool {
+    private static func localCalendarDayWindow(
+        for rawValue: String,
+        timeZone: TimeZone = .current
+    ) -> QueryWindow? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+
+        guard let start = localCalendarDayStart(for: rawValue, timeZone: timeZone, calendar: calendar),
+              let end = calendar.date(byAdding: .day, value: 1, to: start)
+        else {
+            return nil
+        }
+
+        return QueryWindow(start: start, end: end)
+    }
+
+    private static func localCalendarDayStart(
+        for rawValue: String,
+        timeZone: TimeZone = .current,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> Date? {
         let parts = rawValue.split(separator: "-", omittingEmptySubsequences: false)
         guard parts.count == 3,
               parts[0].count == 4,
@@ -810,13 +828,11 @@ public struct QueryCLI: Sendable {
               let month = Int(parts[1]),
               let day = Int(parts[2])
         else {
-            return false
+            return nil
         }
 
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .current
         let components = DateComponents(
-            timeZone: .current,
+            timeZone: timeZone,
             year: year,
             month: month,
             day: day,
@@ -826,13 +842,22 @@ public struct QueryCLI: Sendable {
         )
 
         guard let resolved = calendar.date(from: components) else {
-            return false
+            return nil
         }
 
         let resolvedComponents = calendar.dateComponents([.year, .month, .day], from: resolved)
-        return resolvedComponents.year == year
-            && resolvedComponents.month == month
-            && resolvedComponents.day == day
+        guard resolvedComponents.year == year,
+              resolvedComponents.month == month,
+              resolvedComponents.day == day
+        else {
+            return nil
+        }
+
+        return resolved
+    }
+
+    private static func isValidLocalDateBucket(_ rawValue: String) -> Bool {
+        localCalendarDayStart(for: rawValue) != nil
     }
 
     private static func isValidHourBucket(_ rawValue: String) -> Bool {

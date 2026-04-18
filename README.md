@@ -113,8 +113,8 @@ protect-cadence query compare --since 2026-03-27T00:00:00Z --until 2026-03-28T00
 Notes:
 
 - `query events` defaults to `--limit 50`
-- `query summary` defaults to the last `24` hours
-- `query compare` requires a primary window via `--last-hours` or `--since`/`--until`
+- `query summary` defaults to the last `24` hours unless `--date` is used without an explicit window, in which case it resolves that full local calendar day
+- `query compare` requires a primary window via `--last-hours` or `--since` with optional `--until`
 - `query compare` supports exactly one compare mode: an explicit comparison window via `--vs-since` + `--vs-until`, `--vs-same-window-yesterday`, `--vs-same-window-last-week`, `--vs-window-before`, `--vs-window-after`, or `--vs-prior-window`
 - `--since` and `--until` are the public explicit bounds
 - `--since` alone resolves to a window ending at `now`
@@ -122,7 +122,7 @@ Notes:
 - `--day-of-week` is repeatable and uses local weekdays: `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat`
 - `--weekday` expands to Monday through Friday
 - `--weekend` expands to Saturday and Sunday
-- `--date` applies an exact local calendar-date bucket inside the selected window
+- `--date` applies an exact local calendar-date bucket inside the selected window; without an explicit window it resolves to that full local calendar day
 - `--hour` applies an exact local hour bucket inside the selected window
 - counts treat each normalized cadence event as one event
 - `query summary` includes `eventCount` plus `sourceEventCount` provenance based on distinct Protect `event_id`
