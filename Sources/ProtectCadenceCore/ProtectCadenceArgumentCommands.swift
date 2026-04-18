@@ -116,7 +116,7 @@ struct ProtectCadenceQueryFilterOptions: ParsableArguments {
 
     @Option(
         name: .customLong("hour"),
-        help: "Exact local hour bucket filter."
+        help: "Exact local hour bucket filter. Does not resolve a window on its own."
     )
     var hour: String?
 

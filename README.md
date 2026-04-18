@@ -123,7 +123,8 @@ Notes:
 - `--weekday` expands to Monday through Friday
 - `--weekend` expands to Saturday and Sunday
 - `--date` applies an exact local calendar-date bucket inside the selected window; without an explicit window it resolves to that full local calendar day
-- `--hour` applies an exact local hour bucket inside the selected window
+- `--hour` applies an exact local hour bucket inside the selected window and does not resolve a window on its own
+- with no explicit window, `query events --hour 08:00` filters across all stored rows while `query summary --hour 08:00` still uses its normal last-24-hours default window
 - counts treat each normalized cadence event as one event
 - `query summary` includes `eventCount` plus `sourceEventCount` provenance based on distinct Protect `event_id`
 - `query summary` groups now include a `drillDown` descriptor that points back to the matching `events` slice

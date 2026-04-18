@@ -1736,6 +1736,15 @@ struct ProtectCadenceCoreTests {
     }
 
     @Test
+    func queryEventsHelpExplainsHourDoesNotResolveWindow() {
+        let help = ProtectCadenceHelp.text(for: ["query", "events", "--help"])
+
+        #expect(help?.contains("--hour") == true)
+        #expect(help?.contains("Does not resolve a") == true)
+        #expect(help?.contains("window on its own.") == true)
+    }
+
+    @Test
     func queryCLIRejectsInvalidLastHours() throws {
         do {
             _ = try QueryCLI(arguments: ["summary", "--last-hours", "0"])
@@ -2166,6 +2175,63 @@ struct ProtectCadenceCoreTests {
 
             #expect(eventsRequest.filters.window == expectedWindow)
             #expect(summaryRequest.filters.window == expectedWindow)
+        }
+    }
+
+    @Test
+    func queryCLILeavesHourWithoutExplicitWindowAsPureFilterForEvents() throws {
+        let now = QueryDateParser.parse("2026-03-28T12:00:00Z")!
+        let request = try QueryCLI(arguments: [
+            "events",
+            "--hour", "08:00",
+        ]).eventsRequest(now: now)
+
+        #expect(request.filters.window == nil)
+        #expect(request.filters.hour == "08:00")
+    }
+
+    @Test
+    func queryCLIUsesSummaryDefaultWindowWhenHourHasNoExplicitWindow() throws {
+        let now = QueryDateParser.parse("2026-03-28T12:00:00Z")!
+        let request = try QueryCLI(arguments: [
+            "summary",
+            "--hour", "08:00",
+        ]).summaryRequest(now: now)
+
+        #expect(request.filters.window == QueryWindow(
+            start: now.addingTimeInterval(-24 * 60 * 60),
+            end: now
+        ))
+        #expect(request.filters.hour == "08:00")
+    }
+
+    @Test
+    func queryCLIResolvesDateAndHourWithoutExplicitWindowToFullLocalDay() throws {
+        try withDefaultTimeZone("America/Los_Angeles") {
+            let now = localDate(day: 28, hour: 12, minute: 0)
+            let expectedWindow = QueryWindow(
+                start: localDate(day: 27, hour: 0, minute: 0),
+                end: localDate(day: 28, hour: 0, minute: 0)
+            )
+
+            let eventsRequest = try QueryCLI(arguments: [
+                "events",
+                "--date", "2026-03-27",
+                "--hour", "08:00",
+            ]).eventsRequest(now: now)
+
+            let summaryRequest = try QueryCLI(arguments: [
+                "summary",
+                "--date", "2026-03-27",
+                "--hour", "08:00",
+            ]).summaryRequest(now: now)
+
+            #expect(eventsRequest.filters.window == expectedWindow)
+            #expect(eventsRequest.filters.date == "2026-03-27")
+            #expect(eventsRequest.filters.hour == "08:00")
+            #expect(summaryRequest.filters.window == expectedWindow)
+            #expect(summaryRequest.filters.date == "2026-03-27")
+            #expect(summaryRequest.filters.hour == "08:00")
         }
     }
 
