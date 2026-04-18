@@ -256,4 +256,6 @@ protect-cadence model --help
 protect-cadence auth --help
 ```
 
+---
+
 Made with Codex and OpenClaw.
