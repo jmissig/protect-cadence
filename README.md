@@ -1,6 +1,6 @@
 # protect-cadence
 
-`protect-cadence` is a small local CLI for pulling UniFi Protect detections into a local SQLite database and querying them as compact JSON.
+`protect-cadence` is a small local CLI for pulling UniFi Protect detections into a local SQLite database and querying them as compact local evidence.
 
 It is built around two normal tasks:
 
@@ -77,6 +77,26 @@ The config file stores auth plus a top-level `databasePath`:
 
 The `query` command only needs the `databasePath` to function.
 
+## Output Formats
+
+Commands that return data now default to human-readable output.
+
+- `--format auto` is the default
+- `--format text` forces human-readable output
+- `--format json` forces machine-readable JSON
+- `--json` is a shortcut for `--format json`
+
+In `auto`, interactive terminal output uses the richer table-style presentation when helpful. Redirected or piped stdout falls back to plain text rather than JSON.
+
+If you are scripting, or if an agent needs the full structured response shape, request JSON explicitly:
+
+```bash
+protect-cadence query summary --last-hours 24 --format json
+protect-cadence query compare --last-hours 1 --vs-prior-window --json
+protect-cadence model findings --last-hours 24 --format json
+protect-cadence validate --format json
+```
+
 ## Common Queries
 
 Most people will use these:
@@ -130,7 +150,7 @@ Notes:
 - `query summary` groups now include a `drillDown` descriptor that points back to the matching `events` slice
 - `query compare` reports those same counts for both windows plus simple deltas
 - `query compare` groups now include `windowDrillDown` and `comparisonWindowDrillDown` descriptors for both bucket slices
-- output is JSON
+- use `--format json` when you need the full machine-readable response shape, including filter provenance and drill-down descriptors
 
 ## Overrides
 
@@ -162,12 +182,14 @@ protect-cadence validate --last-hours 12 --sample-limit 20
 protect-cadence validate --last-hours 6 --write-api-snapshot-dir /tmp/protect-sample
 ```
 
-`validate` reuses the same saved auth and override flags as live ingest, fetches a bounded recent sample, and returns JSON covering:
+`validate` reuses the same saved auth and override flags as live ingest, fetches a bounded recent sample, and summarizes:
 
 - whether `timeStart = detectedAt ?? start` still matches recent event shapes
 - how many recent events are settled under `end != nil`
 - whether normalized settled rows collide under the current `source event id + kind` dedupe key
 - compact example rows for manual inspection
+
+Use `--format json` when a script or agent needs the full structured validation report.
 
 If `--write-api-snapshot-dir` is provided, the fetched sample is also written through the existing sanitizer/snapshot helper.
 
@@ -218,6 +240,8 @@ What you can inspect today:
 - modeled detection episodes, filtered by time, camera, kind, or state key
 - attention findings for things like unexpected presence, unusual transitions, or longer-than-usual episodes
 - rebuild output that tells you how much source data was modeled and how long the rebuild took
+
+If OpenClaw or another local agent needs stable machine-readable output from any of these commands, call them with `--format json`.
 
 For the current modeling rules and design details, see `Docs/cadence-modeling-layer.md`.
 

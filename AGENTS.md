@@ -236,8 +236,9 @@ Useful query primitives:
 - optional later baseline-style outputs only if they stay mathematical and evidence-oriented
 
 Output guidance:
-- default to compact output
-- prefer structured JSON for agent consumption
+- default to compact human-readable output for operators
+- use `--format json` for agent and script consumption
+- `--json` is acceptable shorthand, but prefer `--format json` in guidance and examples
 - avoid dumping raw payloads unless explicitly requested
 - optimize for extracting relevant observations rather than narrating conclusions
 - include the effective filters and counting semantics in the response shape

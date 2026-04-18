@@ -2,8 +2,14 @@ import ArgumentParser
 import Foundation
 
 private enum ProtectCadenceCLIPrinter {
-    static func printJSON<T: Encodable>(_ value: T) throws {
-        print(try JSONOutput.encode(value))
+    static func print(
+        _ output: ProtectCadenceCLIOutput,
+        options: ProtectCadenceOutputOptions
+    ) throws {
+        Swift.print(try ProtectCadenceOutputRenderer.render(
+            output: output,
+            format: try options.resolvedFormat()
+        ))
     }
 }
 
@@ -234,6 +240,7 @@ public struct ProtectCadenceCLIIngestCommand: AsyncParsableCommand {
     @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var authOverrides: ProtectCadenceAuthOverrideOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("event-json"), help: "Replay one event object or an array of events from disk.")
     var eventJSONPath: String?
@@ -256,8 +263,9 @@ public struct ProtectCadenceCLIIngestCommand: AsyncParsableCommand {
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try await ProtectCadenceIngestRunner.run(cli: try IngestCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .ingest(try await ProtectCadenceIngestRunner.run(cli: try IngestCLI(command: self))),
+            options: outputOptions
         )
     }
 }
@@ -273,6 +281,7 @@ public struct ProtectCadenceCLIAuthCommand: AsyncParsableCommand {
 
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var authOverrides: ProtectCadenceAuthOverrideOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Flag(name: .customLong("force"), help: "Skip confirmation for clear.")
     var force = false
@@ -280,8 +289,9 @@ public struct ProtectCadenceCLIAuthCommand: AsyncParsableCommand {
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try ProtectCadenceAuthRunner.run(cli: try AuthCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .auth(try ProtectCadenceAuthRunner.run(cli: try AuthCLI(command: self))),
+            options: outputOptions
         )
     }
 }
@@ -294,6 +304,7 @@ public struct ProtectCadenceCLIValidateCommand: AsyncParsableCommand {
 
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var authOverrides: ProtectCadenceAuthOverrideOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("last-hours"), help: "Recent sample window ending now. Default 6.")
     var lastHours = 6
@@ -310,8 +321,9 @@ public struct ProtectCadenceCLIValidateCommand: AsyncParsableCommand {
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try await ProtectCadenceValidateRunner.run(cli: try ValidateCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .validate(try await ProtectCadenceValidateRunner.run(cli: try ValidateCLI(command: self))),
+            options: outputOptions
         )
     }
 }
@@ -361,12 +373,14 @@ public struct ProtectCadenceCLIModelRebuildCommand: AsyncParsableCommand {
     @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions
     @OptionGroup var modelDatabaseOptions: ProtectCadenceModelDatabasePathOptions
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .model(try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))),
+            options: outputOptions
         )
     }
 }
@@ -382,6 +396,7 @@ public struct ProtectCadenceCLIModelEpisodesCommand: AsyncParsableCommand {
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceModelFilterOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("limit"), help: "Maximum episodes to return. Default 50.")
     var limit = 50
@@ -392,8 +407,9 @@ public struct ProtectCadenceCLIModelEpisodesCommand: AsyncParsableCommand {
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .model(try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))),
+            options: outputOptions
         )
     }
 }
@@ -409,6 +425,7 @@ public struct ProtectCadenceCLIModelFindingsCommand: AsyncParsableCommand {
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceModelFilterOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(
         name: .customLong("finding-type"),
@@ -422,8 +439,9 @@ public struct ProtectCadenceCLIModelFindingsCommand: AsyncParsableCommand {
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .model(try ProtectCadenceModelRunner.run(cli: try ModelCLI(command: self))),
+            options: outputOptions
         )
     }
 }
@@ -438,6 +456,7 @@ public struct ProtectCadenceCLIQueryEventsCommand: AsyncParsableCommand {
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceQueryFilterOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("limit"), help: "Row limit. Default 50.")
     var limit = 50
@@ -448,8 +467,9 @@ public struct ProtectCadenceCLIQueryEventsCommand: AsyncParsableCommand {
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try ProtectCadenceQueryRunner.run(cli: try QueryCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .query(try ProtectCadenceQueryRunner.run(cli: try QueryCLI(command: self))),
+            options: outputOptions
         )
     }
 }
@@ -464,6 +484,7 @@ public struct ProtectCadenceCLIQuerySummaryCommand: AsyncParsableCommand {
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceQueryFilterOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("group-by"), help: "Repeatable grouping: camera, kind, date, hour, or weekday.")
     var groupBy: [String] = []
@@ -471,8 +492,9 @@ public struct ProtectCadenceCLIQuerySummaryCommand: AsyncParsableCommand {
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try ProtectCadenceQueryRunner.run(cli: try QueryCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .query(try ProtectCadenceQueryRunner.run(cli: try QueryCLI(command: self))),
+            options: outputOptions
         )
     }
 }
@@ -488,6 +510,7 @@ public struct ProtectCadenceCLIQueryCompareCommand: AsyncParsableCommand {
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceQueryFilterOptions
     @OptionGroup var compareMode: ProtectCadenceCompareModeOptions
+    @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("group-by"), help: "Repeatable grouping: camera, kind, date, hour, or weekday.")
     var groupBy: [String] = []
@@ -495,8 +518,9 @@ public struct ProtectCadenceCLIQueryCompareCommand: AsyncParsableCommand {
     public init() {}
 
     public mutating func run() async throws {
-        try ProtectCadenceCLIPrinter.printJSON(
-            try ProtectCadenceQueryRunner.run(cli: try QueryCLI(command: self))
+        try ProtectCadenceCLIPrinter.print(
+            .query(try ProtectCadenceQueryRunner.run(cli: try QueryCLI(command: self))),
+            options: outputOptions
         )
     }
 }
