@@ -9,10 +9,6 @@ let package = Package(
         .macOS(.v13),
     ],
     products: [
-        .library(
-            name: "ProtectCadenceCore",
-            targets: ["ProtectCadenceCore"]
-        ),
         .executable(
             name: "protect-cadence",
             targets: ["protect-cadence"]
@@ -24,7 +20,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "ProtectCadenceCore",
+            name: "ProtectCadence",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "GRDB", package: "GRDB.swift"),
@@ -32,11 +28,14 @@ let package = Package(
         ),
         .executableTarget(
             name: "protect-cadence",
-            dependencies: ["ProtectCadenceCore"]
+            dependencies: ["ProtectCadence"]
         ),
         .testTarget(
-            name: "ProtectCadenceCoreTests",
-            dependencies: ["ProtectCadenceCore"]
+            name: "ProtectCadenceTests",
+            dependencies: [
+                "ProtectCadence",
+                .product(name: "GRDB", package: "GRDB.swift"),
+            ]
         ),
     ]
 )

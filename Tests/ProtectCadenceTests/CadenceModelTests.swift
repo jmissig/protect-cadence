@@ -1,8 +1,9 @@
 import Foundation
 import GRDB
 import Testing
-@testable import ProtectCadenceCore
+@testable import ProtectCadence
 
+@Suite("Derived Model")
 struct CadenceModelTests {
     @Test
     func modelRebuildMaterializesDeterministicSingleCameraEpisodes() throws {

@@ -1,7 +1,8 @@
 import Foundation
 import Testing
-@testable import ProtectCadenceCore
+@testable import ProtectCadence
 
+@Suite("Output Rendering")
 struct OutputFormatTests {
     @Test
     func queryEventsCommandParsesExplicitFormat() throws {

@@ -3,17 +3,18 @@ BUILD_DIR ?= build
 CONFIGURATION ?= debug
 PREFIX ?= $(HOME)
 BINDIR ?= $(PREFIX)/bin
+SWIFT_FLAGS ?= --disable-sandbox
 
 .PHONY: build release test install clean show-bin
 
 build:
-	swift build --build-path $(BUILD_DIR) --product $(BINARY)
+	swift build $(SWIFT_FLAGS) --build-path $(BUILD_DIR) --product $(BINARY)
 
 release:
-	swift build -c release --build-path $(BUILD_DIR) --product $(BINARY)
+	swift build $(SWIFT_FLAGS) -c release --build-path $(BUILD_DIR) --product $(BINARY)
 
 test:
-	swift test --build-path $(BUILD_DIR)
+	swift test $(SWIFT_FLAGS) --build-path $(BUILD_DIR)
 
 install: release
 	install -d $(BINDIR)

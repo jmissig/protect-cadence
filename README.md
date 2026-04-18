@@ -1,94 +1,131 @@
 # protect-cadence
 
-`protect-cadence` is a small local CLI for pulling UniFi Protect detections into a local SQLite database and querying them as compact local evidence.
+`protect-cadence` is a small local-first CLI for turning UniFi Protect detections into a compact SQLite evidence store, then querying or modeling that evidence without talking to Protect again.
 
-It is built around two normal tasks:
+The product shape is intentionally narrow:
 
-- ingest recent Protect events into SQLite
-- query events, grouped summaries, or window-to-window comparisons
+- one executable: `protect-cadence`
+- one source-of-truth evidence database
+- one optional derived model database
+- one extraction-oriented query surface for operators, scripts, and local agents
 
-It now also has a small cadence-patterns pass:
+It is not a dashboard, clip browser, or general Protect SDK.
 
-- build a simple model of what detection patterns tend to look like on each camera
-- inspect modeled episodes and first-pass attention findings without changing the evidence DB
+## Build And Test
 
-## Install
-
-Build and install the binary:
-
-```bash
-make install
-```
-
-That installs `protect-cadence` to `~/bin/protect-cadence` by default.
-
-If `~/bin` is not already on your `PATH`, add it first.
-
-If you want a different install location:
+Prefer repo-local build and test commands.
 
 ```bash
-sudo make install PREFIX="/usr/local"
+swift build --build-path build --product protect-cadence
+swift test --disable-sandbox --build-path build
 ```
+
+The executable will be at:
+
+```bash
+./build/debug/protect-cadence
+```
+
+`make build`, `make test`, and `make release` are thin wrappers around the same repo-local SwiftPM workflow. Routine verification should stay repo-local; do not rely on an installed binary or shared default database paths.
 
 ## First Run
 
-The normal path is interactive:
+The normal first run is interactive:
+
+```bash
+./build/debug/protect-cadence ingest
+```
+
+On first run it will prompt for:
+
+- Protect controller URL
+- username and password
+- whether to allow insecure TLS
+- a local evidence database path
+- whether to seed an initial recent window
+
+Managed defaults remain:
+
+- config: `~/Library/Application Support/protect-cadence/config.json`
+- evidence DB: `~/Library/Application Support/protect-cadence/protect-cadence.sqlite`
+- model DB: `~/Library/Application Support/protect-cadence/protect-cadence-model.sqlite`
+
+After setup, the usual ingest path is:
+
+```bash
+./build/debug/protect-cadence ingest --last-hours 6
+```
+
+For tests, automation, and agent runs, prefer explicit paths:
+
+```bash
+./build/debug/protect-cadence ingest \
+  --config /tmp/protect-config.json \
+  --db /tmp/protect-cadence.sqlite \
+  --last-hours 6
+```
+
+## What Lives Where
+
+The code is organized around product seams rather than historical scaffolding:
+
+- `Sources/ProtectCadence/Store`: evidence DB schema, migrations, and query surface
+- `Sources/ProtectCadence/Protect`: Protect auth, controller boundary, normalization, ingest, validation, and snapshot helpers
+- `Sources/ProtectCadence/Model`: derived modeling layer built from the evidence DB
+- `Sources/ProtectCadence/CLI`: command definitions, routing, help, and output rendering
+- `Tests/ProtectCadenceTests`: suites split by boundary instead of one catch-all test file
+
+This is still one Swift module by design. The repo is small enough that explicit directories and files are clearer than adding SwiftPM target layering for its own sake.
+
+## Command Surface
+
+The public surface is one executable with a few command families:
 
 ```bash
 protect-cadence ingest
+protect-cadence query events
+protect-cadence query summary
+protect-cadence query compare
+protect-cadence model rebuild
+protect-cadence model episodes
+protect-cadence model findings
+protect-cadence auth status
+protect-cadence validate
 ```
 
-On first run it will:
-
-- prompt for your Protect controller URL, username, and password
-- ask whether to allow insecure TLS
-- prompt for a database path
-- optionally import a recent window immediately
-
-The default managed paths are:
-
-- config: `~/Library/Application Support/protect-cadence/config.json`
-- database: `~/Library/Application Support/protect-cadence/protect-cadence.sqlite`
-- model database: `~/Library/Application Support/protect-cadence/protect-cadence-model.sqlite`
-
-After setup, the usual ingest command is:
+### Query Examples
 
 ```bash
-protect-cadence ingest --last-hours 6
+protect-cadence query events --last-hours 24
+protect-cadence query events --camera Driveway --kind person
+protect-cadence query events --date 2026-03-25 --hour 08:00
+protect-cadence query events --weekday --time-of-day 22:00-06:00
+
+protect-cadence query summary --last-hours 24
+protect-cadence query summary --group-by date --group-by kind
+protect-cadence query summary --weekday --group-by weekday --group-by hour
+
+protect-cadence query compare --last-hours 1 --vs-prior-window
+protect-cadence query compare --last-hours 1 --vs-same-window-last-week
+protect-cadence query compare \
+  --since 2026-03-27T00:00:00Z \
+  --until 2026-03-28T00:00:00Z \
+  --vs-same-window-yesterday \
+  --group-by date \
+  --group-by kind
 ```
 
-This is designed to be run regularly via launchd or cron. Time overlap is fine.
+Useful semantics:
 
-## Config Shape
+- `query events` defaults to `--limit 50`
+- `query summary` defaults to the last 24 hours unless `--date` is used without an explicit window
+- `query compare` requires one primary window plus exactly one comparison mode
+- `--day-of-week`, `--weekday`, `--weekend`, `--date`, `--hour`, and `--time-of-day` all apply in local machine time
+- counts are normalized event-row counts first; distinct source Protect event counts are reported separately where relevant
 
-The config file stores auth plus a top-level `databasePath`:
+### JSON Output
 
-```json
-{
-  "auth": {
-    "allowInsecureTLS": false,
-    "controllerURL": "https://protect.local",
-    "password": "local-password",
-    "username": "local-user"
-  },
-  "databasePath": "/Users/example/Library/Application Support/protect-cadence/protect-cadence.sqlite"
-}
-```
-
-The `query` command only needs the `databasePath` to function.
-
-## Output Formats
-
-Commands that return data now default to human-readable output.
-
-- `--format auto` is the default
-- `--format text` forces human-readable output
-- `--format json` forces machine-readable JSON
-- `--json` is a shortcut for `--format json`
-
-In `auto`, interactive terminal output uses the richer table-style presentation when helpful. Redirected or piped stdout falls back to plain text rather than JSON.
-
-If you are scripting, or if an agent needs the full structured response shape, request JSON explicitly:
+Human-readable text is the default. Use JSON explicitly when an agent or script needs the full response shape:
 
 ```bash
 protect-cadence query summary --last-hours 24 --format json
@@ -97,84 +134,36 @@ protect-cadence model findings --last-hours 24 --format json
 protect-cadence validate --format json
 ```
 
-## Common Queries
+`query summary` and `query compare` JSON responses include drill-down descriptors that point back to the matching `query events` slice.
 
-Most people will use these:
+## Protect Boundary
 
-```bash
-protect-cadence query events
-protect-cadence query events --limit 10
-protect-cadence query events --last-hours 24
-protect-cadence query events --since 2026-03-25T00:00:00Z
-protect-cadence query events --since 2026-03-25T00:00:00Z --until 2026-03-26T00:00:00Z
-protect-cadence query events --camera Driveway --kind person
-protect-cadence query events --date 2026-03-25 --hour 08:00
-protect-cadence query events --day-of-week mon --day-of-week wed
-protect-cadence query events --weekday
-protect-cadence query events --weekend --time-of-day 22:00-06:00
-protect-cadence query events --time-of-day 22:00-06:00
+Live ingest supports either saved config or explicit overrides:
 
-protect-cadence query summary
-protect-cadence query summary --last-hours 24
-protect-cadence query summary --since 2026-03-25T00:00:00Z --until 2026-03-26T00:00:00Z --group-by date
-protect-cadence query summary --group-by date --group-by kind
-protect-cadence query summary --weekday --group-by weekday --group-by hour
+- `--controller-url`
+- `--username`
+- `--password`
+- `--allow-insecure-tls`
 
-protect-cadence query compare --last-hours 1 --vs-same-window-yesterday
-protect-cadence query compare --last-hours 1 --vs-same-window-last-week
-protect-cadence query compare --last-hours 1 --vs-prior-window
-protect-cadence query compare --since 2026-03-27 08:00 --until 2026-03-27 09:00 --vs-since 2026-03-26 08:00 --vs-until 2026-03-26 09:00
-protect-cadence query compare --since 2026-03-27 08:00 --until 2026-03-27 09:00 --vs-same-window-last-week
-protect-cadence query compare --since 2026-03-27 08:00 --until 2026-03-27 09:00 --vs-window-before 2026-03-20 09:00
-protect-cadence query compare --since 2026-03-20 08:00 --until 2026-03-20 09:00 --vs-window-after 2026-03-27 08:00
-protect-cadence query compare --since 2026-03-27T00:00:00Z --until 2026-03-28T00:00:00Z --vs-same-window-yesterday --group-by date --group-by kind
-```
+Environment variables are also supported:
 
-Notes:
+- `PROTECT_CONTROLLER_URL`
+- `PROTECT_USERNAME`
+- `PROTECT_PASSWORD`
+- `PROTECT_ALLOW_INSECURE_TLS`
 
-- `query events` defaults to `--limit 50`
-- `query summary` defaults to the last `24` hours unless `--date` is used without an explicit window, in which case it resolves that full local calendar day
-- `query compare` requires a primary window via `--last-hours` or `--since` with optional `--until`
-- `query compare` supports exactly one compare mode: an explicit comparison window via `--vs-since` + `--vs-until`, `--vs-same-window-yesterday`, `--vs-same-window-last-week`, `--vs-window-before`, `--vs-window-after`, or `--vs-prior-window`
-- `--since` and `--until` are the public explicit bounds
-- `--since` alone resolves to a window ending at `now`
-- `--until` requires `--since`
-- `--day-of-week` is repeatable and uses local weekdays: `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat`
-- `--weekday` expands to Monday through Friday
-- `--weekend` expands to Saturday and Sunday
-- `--date` applies an exact local calendar-date bucket inside the selected window; without an explicit window it resolves to that full local calendar day
-- `--hour` applies an exact local hour bucket inside the selected window and does not resolve a window on its own
-- with no explicit window, `query events --hour 08:00` filters across all stored rows while `query summary --hour 08:00` still uses its normal last-24-hours default window
-- counts treat each normalized cadence event as one event
-- `query summary` includes `eventCount` plus `sourceEventCount` provenance based on distinct Protect `event_id`
-- `query summary` groups now include a `drillDown` descriptor that points back to the matching `events` slice
-- `query compare` reports those same counts for both windows plus simple deltas
-- `query compare` groups now include `windowDrillDown` and `comparisonWindowDrillDown` descriptors for both bucket slices
-- use `--format json` when you need the full machine-readable response shape, including filter provenance and drill-down descriptors
-
-## Overrides
-
-You can override the saved paths when needed:
+For replay or fixture-based verification:
 
 ```bash
-protect-cadence ingest --config /path/to/config.json
-protect-cadence query events --db /path/to/protect-cadence.sqlite
+protect-cadence ingest \
+  --db /tmp/protect-cadence.sqlite \
+  --event-json Tests/Fixtures/ProtectAPI/events-response.json \
+  --camera-json Tests/Fixtures/ProtectAPI/cameras-response.json
 ```
 
-Live ingest auth can also be overridden with flags or environment variables:
+## Validation And Snapshots
 
-- `--controller-url`, `--username`, `--password`, `--allow-insecure-tls`
-- `PROTECT_CONTROLLER_URL`, `PROTECT_USERNAME`, `PROTECT_PASSWORD`, `PROTECT_ALLOW_INSECURE_TLS`
-
-If you want to manage saved auth directly:
-
-```bash
-protect-cadence auth status
-protect-cadence auth login
-protect-cadence auth clear
-```
-
-To validate live ingest assumptions against a current controller sample without writing to SQLite:
+`validate` fetches a bounded recent sample without writing to the evidence DB and summarizes current controller assumptions:
 
 ```bash
 protect-cadence validate
@@ -182,31 +171,20 @@ protect-cadence validate --last-hours 12 --sample-limit 20
 protect-cadence validate --last-hours 6 --write-api-snapshot-dir /tmp/protect-sample
 ```
 
-`validate` reuses the same saved auth and override flags as live ingest, fetches a bounded recent sample, and summarizes:
+It checks:
 
-- whether `timeStart = detectedAt ?? start` still matches recent event shapes
-- how many recent events are settled under `end != nil`
-- whether normalized settled rows collide under the current `source event id + kind` dedupe key
-- compact example rows for manual inspection
+- how `timeStart` is chosen from live payloads
+- how many events are settled versus open
+- whether the current dedupe key collides on recent data
+- compact examples for manual inspection
 
-Use `--format json` when a script or agent needs the full structured validation report.
+If `--write-api-snapshot-dir` is supplied, the sample is sanitized and written through the same fixture snapshot helper used by tests.
 
-If `--write-api-snapshot-dir` is provided, the fetched sample is also written through the existing sanitizer/snapshot helper.
+## Derived Model Database
 
-## Cadence patterns model
+The evidence DB stays authoritative. The model layer is a separate rebuildable artifact.
 
-If the raw event table tells you what happened, the cadence patterns model is the first pass at telling you what usually happens around here and what might deserve a closer look.
-
-Use it when you want to answer questions like:
-
-- what patterns seem routine on this camera?
-- what detections look structurally unusual for this time of day?
-- what long-running detection episodes stand out from the usual cadence?
-- what transitions between states happened at an unusual time?
-
-The model is derived from the evidence database. The source-of-truth remains `protect-cadence.sqlite`, and the cadence-patterns data is rebuilt into a separate sibling `*-model.sqlite` file by default.
-
-A typical flow looks like this:
+Typical flow:
 
 ```bash
 protect-cadence model rebuild
@@ -214,48 +192,37 @@ protect-cadence model findings --last-hours 24
 protect-cadence model episodes --camera Driveway --since 2026-04-14T00:00:00Z
 ```
 
-You can also point both databases explicitly:
+You can point both databases explicitly:
 
 ```bash
-protect-cadence model rebuild --db /path/to/protect-cadence.sqlite --model-db /path/to/protect-cadence-model.sqlite
+protect-cadence model rebuild \
+  --db /path/to/protect-cadence.sqlite \
+  --model-db /path/to/protect-cadence-model.sqlite
 ```
 
-To inspect the model:
+The current model surface exposes:
 
-```bash
-protect-cadence model episodes
-protect-cadence model episodes --limit 20 --order oldest
-protect-cadence model episodes --camera Driveway --kind person
-protect-cadence model episodes --state-key "Driveway:person" --since 2026-04-14T00:00:00Z
+- deterministic detection episodes
+- per-state time-bucket statistics
+- state transition statistics
+- descriptive attention findings such as `unexpected_presence`, `unexpected_transition`, and `unusual_duration`
 
-protect-cadence model findings
-protect-cadence model findings --finding-type unexpected_presence
-protect-cadence model findings --finding-type unexpected_transition
-protect-cadence model findings --finding-type unusual_duration --camera Driveway
-protect-cadence model findings --last-hours 24
-```
+This layer is still evidence-oriented. It does not decide what is anomalous for the household.
 
-What you can inspect today:
+See [Docs/cadence-modeling-layer.md](Docs/cadence-modeling-layer.md) for the current modeling rules.
 
-- modeled detection episodes, filtered by time, camera, kind, or state key
-- attention findings for things like unexpected presence, unusual transitions, or longer-than-usual episodes
-- rebuild output that tells you how much source data was modeled and how long the rebuild took
+## Related Docs
 
-If OpenClaw or another local agent needs stable machine-readable output from any of these commands, call them with `--format json`.
+- [Docs/protect-api-contract.md](Docs/protect-api-contract.md)
+- [Docs/cadence-modeling-layer.md](Docs/cadence-modeling-layer.md)
 
-For the current modeling rules and design details, see `Docs/cadence-modeling-layer.md`.
-
-For full command help:
+For command help:
 
 ```bash
 protect-cadence --help
 protect-cadence ingest --help
-protect-cadence validate --help
 protect-cadence query --help
 protect-cadence model --help
 protect-cadence auth --help
+protect-cadence validate --help
 ```
-
----
-
-Made with Codex and OpenClaw.

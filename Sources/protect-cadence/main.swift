@@ -1,4 +1,4 @@
-import ProtectCadenceCore
+import ProtectCadence
 
 @main
 enum ProtectCadenceCommandMain {
