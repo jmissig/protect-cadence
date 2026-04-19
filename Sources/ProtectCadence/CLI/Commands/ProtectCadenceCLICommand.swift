@@ -1,6 +1,10 @@
 import ArgumentParser
 import Foundation
 
+// VERSION-SYNC-START
+private let protectCadenceCLIVersion = "1.0.0"
+// VERSION-SYNC-END
+
 public struct ProtectCadenceCLICommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "protect-cadence",
@@ -16,6 +20,7 @@ public struct ProtectCadenceCLICommand: AsyncParsableCommand {
           protect-cadence model findings --finding-type unexpected_presence
           protect-cadence model findings --finding-type unexpected_transition
         """,
+        version: protectCadenceCLIVersion,
         subcommands: [
             ProtectCadenceCLIIngestCommand.self,
             ProtectCadenceCLIQueryCommand.self,
