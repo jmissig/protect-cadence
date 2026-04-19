@@ -39,10 +39,11 @@ Data types:
 
 ## Core commands (illustrative)
 
-- `protect-cadence query events --format json`
-- `protect-cadence query summary --format json`
-- `protect-cadence query compare --format json`
-- `protect-cadence model findings --format json`
+- `protect-cadence query events --last-hours 6 --format json`
+- `protect-cadence query events --last-hours 24 --camera Driveway --format json`
+- `protect-cadence query summary --last-hours 24 --format json`
+- `protect-cadence query compare --last-hours 2 --vs-prior-window --format json`
+- `protect-cadence model findings --last-hours 24 --format json`
 - `protect-cadence validate --format json`
 
 Not exhaustive. Use `--help` and adapt to the current interface.
