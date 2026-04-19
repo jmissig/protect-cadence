@@ -48,6 +48,12 @@ For tests, automation, and agent runs, prefer explicit paths:
   --last-hours 6
 ```
 
+To install the repo's OpenClaw skill separately:
+
+```bash
+make install-skill
+```
+
 ## What Lives Where
 
 The code is organized around product seams rather than historical scaffolding:
