@@ -11,12 +11,36 @@ The product shape is intentionally narrow:
 
 It is not a dashboard, clip browser, or general Protect SDK.
 
+## Install
+
+Build and install the binary:
+
+```bash
+make install
+```
+
+That installs `protect-cadence` to `~/bin/protect-cadence` by default.
+
+If `~/bin` is not already on your `PATH`, add it first.
+
+If you want a different install location:
+
+```bash
+sudo make install PREFIX="/usr/local"
+```
+
+To install the repo's OpenClaw skill separately:
+
+```bash
+make install-skill
+```
+
 ## First Run
 
 The normal first run is interactive:
 
 ```bash
-./build/debug/protect-cadence ingest
+protect-cadence ingest
 ```
 
 On first run it will prompt for:
@@ -36,22 +60,16 @@ Managed defaults remain:
 After setup, the usual ingest path is:
 
 ```bash
-./build/debug/protect-cadence ingest --last-hours 6
+protect-cadence ingest --last-hours 6
 ```
 
 For tests, automation, and agent runs, prefer explicit paths:
 
 ```bash
-./build/debug/protect-cadence ingest \
+protect-cadence ingest \
   --config /tmp/protect-config.json \
   --db /tmp/protect-cadence.sqlite \
   --last-hours 6
-```
-
-To install the repo's OpenClaw skill separately:
-
-```bash
-make install-skill
 ```
 
 ## What Lives Where
