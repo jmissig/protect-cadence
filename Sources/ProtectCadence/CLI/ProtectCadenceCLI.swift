@@ -5,6 +5,7 @@ public enum ProtectCadenceSubcommand: String, Sendable {
     case query
     case model
     case auth
+    case setup
     case validate
 }
 
@@ -16,7 +17,7 @@ public enum ProtectCadenceCLIError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case .missingSubcommand:
-            return "expected a subcommand such as 'ingest', 'query', 'model', 'auth', or 'validate'"
+            return "expected a subcommand such as 'ingest', 'query', 'model', 'auth', 'setup', or 'validate'"
         case let .unknownSubcommand(command):
             return "unknown subcommand '\(command)'"
         case let .unexpectedArgument(argument):
@@ -81,6 +82,13 @@ public enum ProtectCadenceCLIRunner {
             return .auth(
                 try ProtectCadenceAuthRunner.run(
                     arguments: remainingArguments,
+                    environment: environment
+                )
+            )
+        case .setup:
+            return .auth(
+                try ProtectCadenceAuthRunner.run(
+                    arguments: [AuthAction.login.rawValue] + remainingArguments,
                     environment: environment
                 )
             )

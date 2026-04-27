@@ -57,6 +57,16 @@ Managed defaults remain:
 - evidence DB: `~/Library/Application Support/protect-cadence/protect-cadence.sqlite`
 - model DB: `~/Library/Application Support/protect-cadence/protect-cadence-model.sqlite`
 
+If you only want to configure saved controller auth, use the canonical auth
+command:
+
+```bash
+protect-cadence auth login
+```
+
+`protect-cadence setup` is a convenience alias for `auth login` so local tools
+can share the same friendly entrypoint while keeping `auth` canonical.
+
 After setup, the usual ingest path is:
 
 ```bash
@@ -97,6 +107,8 @@ protect-cadence model rebuild
 protect-cadence model episodes
 protect-cadence model findings
 protect-cadence auth status
+protect-cadence auth login
+protect-cadence setup  # alias for auth login
 protect-cadence validate
 ```
 
@@ -212,6 +224,7 @@ protect-cadence ingest --help
 protect-cadence query --help
 protect-cadence model --help
 protect-cadence auth --help
+protect-cadence setup --help
 protect-cadence validate --help
 ```
 

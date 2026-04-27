@@ -152,6 +152,33 @@ struct ProtectCadenceCLITests {
     }
 
     @Test
+    func setupAliasRoutesToAuthLogin() async throws {
+        let configPath = temporaryDirectoryPath() + "/config.json"
+        let output = try await ProtectCadenceCLIRunner.run(
+            arguments: [
+                "setup",
+                "--config", configPath,
+                "--controller-url", "https://protect.example",
+                "--username", "setup-user",
+                "--password", "setup-pass",
+            ],
+            environment: ["PROTECT_ALLOW_INSECURE_TLS": "false"]
+        )
+
+        switch output {
+        case let .auth(response):
+            #expect(response.command == "protect-cadence auth")
+            #expect(response.action == "login")
+            #expect(response.status == "configured")
+            #expect(response.controllerURL == "https://protect.example")
+            #expect(response.username == "setup-user")
+            #expect(response.storedPasswordExists)
+        case .ingest, .query, .model, .validate:
+            Issue.record("expected auth output")
+        }
+    }
+
+    @Test
     func ingestRunnerUsesResolvedConfigPassword() async throws {
         let configPath = temporaryDirectoryPath() + "/config.json"
         let databasePath = temporaryDatabasePath()
@@ -306,6 +333,20 @@ struct ProtectCadenceCLITests {
         let help = ProtectCadenceHelp.text(for: ["ingest", "--help"])
 
         #expect(help?.contains("Interactive first-run setup") == true)
+    }
+
+    @Test
+    func parserTreatsSetupAsExecutableAliasCommand() throws {
+        let parsed = try ProtectCadenceCLICommand.parseAsRoot(["setup"])
+
+        #expect(parsed is ProtectCadenceCLISetupCommand)
+    }
+
+    @Test
+    func helpTextIncludesSetupAliasGuidance() {
+        let help = ProtectCadenceHelp.text(for: ["setup", "--help"])
+
+        #expect(help?.contains("Alias for `auth login`") == true)
     }
 
     @Test

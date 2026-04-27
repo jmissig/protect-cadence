@@ -163,6 +163,18 @@ struct AuthCLI: Sendable {
         try self.init(command: ProtectCadenceCLIAuthCommand.parse(arguments))
     }
 
+    init(
+        action: AuthAction,
+        overrides: ProtectAuthOverrides,
+        configPath: String,
+        force: Bool
+    ) {
+        self.action = action
+        self.overrides = overrides
+        self.configPath = configPath
+        self.force = force
+    }
+
     init(command: ProtectCadenceCLIAuthCommand) throws {
         let action: AuthAction
         if let rawAction = command.action {

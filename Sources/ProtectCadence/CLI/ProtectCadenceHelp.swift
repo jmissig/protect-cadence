@@ -11,6 +11,8 @@ public enum ProtectCadenceHelp {
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIIngestCommand.self)
         case ["auth"]:
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIAuthCommand.self)
+        case ["setup"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLISetupCommand.self)
         case ["validate"]:
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIValidateCommand.self)
         case ["query"]:
