@@ -23,6 +23,7 @@
 - Keep the current summary/compare drill-down descriptors stable enough for agents to rely on.
 - Add richer drill-down metadata only if downstream tools need more than an exact `query events` slice.
 - Consider whether a small shared query grammar object should become a documented contract for OpenClaw-facing integrations.
+- Use [Docs/pattern-intelligence-proposal.md](Docs/pattern-intelligence-proposal.md) to guide any Datasette/read-only audit docs, stable evidence-output fields, future Robut-composed House Activity Almanac/Guide material, and correction/privacy boundary work.
 
 ## Derived Model Database
 
