@@ -123,6 +123,12 @@ protect-cadence query events --weekday --time-of-day 22:00-06:00
 protect-cadence query summary --last-hours 24
 protect-cadence query summary --group-by date --group-by kind
 protect-cadence query summary --weekday --group-by weekday --group-by hour
+protect-cadence query summary \
+  --since "2026-03-25 00:00" \
+  --until "2026-03-26 00:00" \
+  --group-by weekday \
+  --group-by hour \
+  --group-by camera
 
 protect-cadence query compare --last-hours 1 --vs-prior-window
 protect-cadence query compare --last-hours 1 --vs-same-window-last-week
@@ -141,6 +147,8 @@ Useful semantics:
 - `query compare` requires one primary window plus exactly one comparison mode
 - `--day-of-week`, `--weekday`, `--weekend`, `--date`, `--hour`, and `--time-of-day` all apply in local machine time
 - counts are normalized event-row counts first; distinct source Protect event counts are reported separately where relevant
+- `query summary --group-by` can be repeated for descriptive distributions such as weekday/hour/camera within one window
+- summaries return observed buckets only; `query compare` preserves zero-count peer buckets when one side of a comparison has activity
 
 ### JSON Output
 
@@ -231,4 +239,3 @@ protect-cadence validate --help
 ---
 
 Made with Codex and OpenClaw.
-

@@ -742,6 +742,100 @@ struct ProtectCadenceStoreTests {
     }
 
     @Test
+    func summaryCanGroupDistributionByWeekdayHourAndCameraWithinOneWindow() throws {
+        let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 5),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "driveway-person"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 15),
+                    camera: "Backyard",
+                    kind: "animal",
+                    eventID: "backyard-animal"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 45),
+                    camera: "Driveway",
+                    kind: "vehicle",
+                    eventID: "driveway-vehicle"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 9, minute: 10),
+                    camera: "Porch",
+                    kind: "package",
+                    eventID: "porch-package"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 10, minute: 0),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "outside-window"
+                ),
+            ],
+            into: database
+        )
+
+        let window = QueryWindow(
+            start: localDate(day: 25, hour: 8, minute: 0),
+            end: localDate(day: 25, hour: 10, minute: 0)
+        )
+
+        let summary = try withDefaultTimeZone("America/Los_Angeles") {
+            try database.fetchSummary(
+                SummaryRequest(
+                    filters: QueryFilters(window: window),
+                    groupBy: [.weekday, .hour, .camera]
+                )
+            )
+        }
+
+        #expect(summary.totalEventCount == 4)
+        #expect(summary.totalSourceEventCount == 4)
+        #expect(summary.groupBy == [.weekday, .hour, .camera])
+        #expect(summary.groups == [
+            summaryGroup(
+                group: ["weekday": "wed", "hour": "08:00", "camera": "Backyard"],
+                eventCount: 1,
+                sourceEventCount: 1,
+                filters: QueryFilters(
+                    window: window,
+                    cameras: ["Backyard"],
+                    weekdays: [.wed],
+                    hour: "08:00"
+                )
+            ),
+            summaryGroup(
+                group: ["weekday": "wed", "hour": "08:00", "camera": "Driveway"],
+                eventCount: 2,
+                sourceEventCount: 2,
+                filters: QueryFilters(
+                    window: window,
+                    cameras: ["Driveway"],
+                    weekdays: [.wed],
+                    hour: "08:00"
+                )
+            ),
+            summaryGroup(
+                group: ["weekday": "wed", "hour": "09:00", "camera": "Porch"],
+                eventCount: 1,
+                sourceEventCount: 1,
+                filters: QueryFilters(
+                    window: window,
+                    cameras: ["Porch"],
+                    weekdays: [.wed],
+                    hour: "09:00"
+                )
+            ),
+        ])
+    }
+
+    @Test
     func summaryCanFilterByWeekendAndGroupByWeekday() throws {
         let database = try ProtectCadenceDatabase(path: temporaryDatabasePath())
 

@@ -1317,6 +1317,107 @@ struct ProtectCadenceCLITests {
     }
 
     @Test
+    func queryRunnerSummarySupportsDistributionGroupsInOneWindow() throws {
+        let databasePath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: databasePath)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 5),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "driveway-person"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 8, minute: 15),
+                    camera: "Backyard",
+                    kind: "animal",
+                    eventID: "backyard-animal"
+                ),
+                EventRow(
+                    timeStart: localDate(day: 25, hour: 9, minute: 10),
+                    camera: "Porch",
+                    kind: "package",
+                    eventID: "porch-package"
+                ),
+            ],
+            into: database
+        )
+
+        let output = try withDefaultTimeZone("America/Los_Angeles") {
+            try ProtectCadenceQueryRunner.run(
+                arguments: [
+                    "summary",
+                    "--db", databasePath,
+                    "--since", "2026-03-25 08:00",
+                    "--until", "2026-03-25 10:00",
+                    "--group-by", "weekday",
+                    "--group-by", "hour",
+                    "--group-by", "camera",
+                ]
+            )
+        }
+
+        switch output {
+        case let .summary(response):
+            let window = QueryWindow(
+                start: localDate(day: 25, hour: 8, minute: 0),
+                end: localDate(day: 25, hour: 10, minute: 0)
+            )
+
+            #expect(response.filters.window == window)
+            #expect(response.groupBy == [.weekday, .hour, .camera])
+            #expect(response.totalEventCount == 3)
+            #expect(response.totalSourceEventCount == 3)
+            #expect(response.groups == [
+                summaryGroup(
+                    group: ["weekday": "wed", "hour": "08:00", "camera": "Backyard"],
+                    eventCount: 1,
+                    sourceEventCount: 1,
+                    filters: QueryFilters(
+                        window: window,
+                        cameras: ["Backyard"],
+                        weekdays: [.wed],
+                        hour: "08:00"
+                    )
+                ),
+                summaryGroup(
+                    group: ["weekday": "wed", "hour": "08:00", "camera": "Driveway"],
+                    eventCount: 1,
+                    sourceEventCount: 1,
+                    filters: QueryFilters(
+                        window: window,
+                        cameras: ["Driveway"],
+                        weekdays: [.wed],
+                        hour: "08:00"
+                    )
+                ),
+                summaryGroup(
+                    group: ["weekday": "wed", "hour": "09:00", "camera": "Porch"],
+                    eventCount: 1,
+                    sourceEventCount: 1,
+                    filters: QueryFilters(
+                        window: window,
+                        cameras: ["Porch"],
+                        weekdays: [.wed],
+                        hour: "09:00"
+                    )
+                ),
+            ])
+
+            let json = try JSONOutput.encode(output)
+            #expect(json.contains("\"groupBy\""))
+            #expect(json.contains("\"weekday\""))
+            #expect(json.contains("\"hour\""))
+            #expect(json.contains("\"camera\""))
+            #expect(json.contains("\"drillDown\""))
+        case .events, .compare:
+            Issue.record("expected summary output")
+        }
+    }
+
+    @Test
     func queryRunnerCompareProducesWindowToWindowCountsAndDeltas() throws {
         let databasePath = temporaryDatabasePath()
         let database = try ProtectCadenceDatabase(path: databasePath)
