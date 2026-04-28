@@ -369,8 +369,12 @@ public struct SummaryResponse: Codable, Sendable {
 public struct CompareRequest: Sendable {
     public let filters: QueryFilters
     public let compareMode: CompareMode
-    public let comparisonWindow: QueryWindow
+    public let comparisonWindows: [QueryWindow]
     public let groupBy: [SummaryGroupBy]
+
+    public var comparisonWindow: QueryWindow {
+        comparisonWindows[0]
+    }
 
     public init(
         filters: QueryFilters,
@@ -378,9 +382,24 @@ public struct CompareRequest: Sendable {
         comparisonWindow: QueryWindow,
         groupBy: [SummaryGroupBy] = [.camera, .kind]
     ) {
+        self.init(
+            filters: filters,
+            compareMode: compareMode,
+            comparisonWindows: [comparisonWindow],
+            groupBy: groupBy
+        )
+    }
+
+    public init(
+        filters: QueryFilters,
+        compareMode: CompareMode,
+        comparisonWindows: [QueryWindow],
+        groupBy: [SummaryGroupBy] = [.camera, .kind]
+    ) {
+        precondition(!comparisonWindows.isEmpty, "CompareRequest requires at least one comparison window")
         self.filters = filters
         self.compareMode = compareMode
-        self.comparisonWindow = comparisonWindow
+        self.comparisonWindows = comparisonWindows
         self.groupBy = groupBy
     }
 }
@@ -423,6 +442,31 @@ public struct CompareGroup: Codable, Sendable, Equatable {
     }
 }
 
+public struct ComparePeer: Codable, Sendable, Equatable {
+    public let index: Int
+    public let comparisonWindow: QueryWindow
+    public let comparisonTotals: CompareCounts
+    public let totalEventCountDelta: Int
+    public let totalSourceEventCountDelta: Int
+    public let groups: [CompareGroup]
+
+    public init(
+        index: Int,
+        comparisonWindow: QueryWindow,
+        comparisonTotals: CompareCounts,
+        totalEventCountDelta: Int,
+        totalSourceEventCountDelta: Int,
+        groups: [CompareGroup]
+    ) {
+        self.index = index
+        self.comparisonWindow = comparisonWindow
+        self.comparisonTotals = comparisonTotals
+        self.totalEventCountDelta = totalEventCountDelta
+        self.totalSourceEventCountDelta = totalSourceEventCountDelta
+        self.groups = groups
+    }
+}
+
 public struct CompareResponse: Codable, Sendable {
     public let command: String
     public let databasePath: String
@@ -435,6 +479,7 @@ public struct CompareResponse: Codable, Sendable {
     public let totalEventCountDelta: Int
     public let totalSourceEventCountDelta: Int
     public let groups: [CompareGroup]
+    public let comparisonPeers: [ComparePeer]?
 
     public init(
         command: String,
@@ -447,7 +492,8 @@ public struct CompareResponse: Codable, Sendable {
         comparisonTotals: CompareCounts,
         totalEventCountDelta: Int,
         totalSourceEventCountDelta: Int,
-        groups: [CompareGroup]
+        groups: [CompareGroup],
+        comparisonPeers: [ComparePeer]? = nil
     ) {
         self.command = command
         self.databasePath = databasePath
@@ -460,6 +506,7 @@ public struct CompareResponse: Codable, Sendable {
         self.totalEventCountDelta = totalEventCountDelta
         self.totalSourceEventCountDelta = totalSourceEventCountDelta
         self.groups = groups
+        self.comparisonPeers = comparisonPeers
     }
 }
 
@@ -639,45 +686,63 @@ public final class ProtectCadenceDatabase {
                 filters: request.filters,
                 groupBy: request.groupBy
             )
-            let comparisonSnapshot = try fetchSummarySnapshot(
-                db: db,
-                filters: QueryFilters(
-                    window: request.comparisonWindow,
-                    cameras: request.filters.cameras,
-                    kinds: request.filters.kinds,
-                    weekdays: request.filters.weekdays,
-                    timeOfDay: request.filters.timeOfDay,
-                    date: request.filters.date,
-                    hour: request.filters.hour
-                ),
-                groupBy: request.groupBy
-            )
+            let comparisonPeers = try request.comparisonWindows.enumerated().map { offset, comparisonWindow in
+                let comparisonSnapshot = try fetchSummarySnapshot(
+                    db: db,
+                    filters: comparisonFilters(from: request.filters, window: comparisonWindow),
+                    groupBy: request.groupBy
+                )
+                let comparisonTotals = CompareCounts(
+                    eventCount: comparisonSnapshot.totalEventCount,
+                    sourceEventCount: comparisonSnapshot.totalSourceEventCount
+                )
+
+                return ComparePeer(
+                    index: offset + 1,
+                    comparisonWindow: comparisonWindow,
+                    comparisonTotals: comparisonTotals,
+                    totalEventCountDelta: windowSnapshot.totalEventCount - comparisonSnapshot.totalEventCount,
+                    totalSourceEventCountDelta: windowSnapshot.totalSourceEventCount - comparisonSnapshot.totalSourceEventCount,
+                    groups: compareGroups(
+                        windowGroups: windowSnapshot.groups,
+                        comparisonGroups: comparisonSnapshot.groups,
+                        groupBy: request.groupBy,
+                        primaryFilters: request.filters,
+                        comparisonWindow: comparisonWindow
+                    )
+                )
+            }
+            let firstComparisonPeer = comparisonPeers[0]
 
             return CompareResponse(
                 command: ProtectCadenceCommand.query.rawValue,
                 databasePath: path,
                 filters: request.filters,
-                comparisonWindow: request.comparisonWindow,
+                comparisonWindow: firstComparisonPeer.comparisonWindow,
                 groupBy: request.groupBy,
                 totals: CompareCounts(
                     eventCount: windowSnapshot.totalEventCount,
                     sourceEventCount: windowSnapshot.totalSourceEventCount
                 ),
-                comparisonTotals: CompareCounts(
-                    eventCount: comparisonSnapshot.totalEventCount,
-                    sourceEventCount: comparisonSnapshot.totalSourceEventCount
-                ),
-                totalEventCountDelta: windowSnapshot.totalEventCount - comparisonSnapshot.totalEventCount,
-                totalSourceEventCountDelta: windowSnapshot.totalSourceEventCount - comparisonSnapshot.totalSourceEventCount,
-                groups: compareGroups(
-                    windowGroups: windowSnapshot.groups,
-                    comparisonGroups: comparisonSnapshot.groups,
-                    groupBy: request.groupBy,
-                    primaryFilters: request.filters,
-                    comparisonWindow: request.comparisonWindow
-                )
+                comparisonTotals: firstComparisonPeer.comparisonTotals,
+                totalEventCountDelta: firstComparisonPeer.totalEventCountDelta,
+                totalSourceEventCountDelta: firstComparisonPeer.totalSourceEventCountDelta,
+                groups: firstComparisonPeer.groups,
+                comparisonPeers: comparisonPeers.count > 1 ? comparisonPeers : nil
             )
         }
+    }
+
+    private func comparisonFilters(from primaryFilters: QueryFilters, window: QueryWindow) -> QueryFilters {
+        QueryFilters(
+            window: window,
+            cameras: primaryFilters.cameras,
+            kinds: primaryFilters.kinds,
+            weekdays: primaryFilters.weekdays,
+            timeOfDay: primaryFilters.timeOfDay,
+            date: primaryFilters.date,
+            hour: primaryFilters.hour
+        )
     }
 
     private func fetchSummaryGroups(
@@ -789,15 +854,7 @@ public final class ProtectCadenceDatabase {
                     groupBy: groupBy
                 ),
                 comparisonWindowDrillDown: comparisonGroup?.drillDown ?? makeDrillDownDescriptor(
-                    baseFilters: QueryFilters(
-                        window: comparisonWindow,
-                        cameras: primaryFilters.cameras,
-                        kinds: primaryFilters.kinds,
-                        weekdays: primaryFilters.weekdays,
-                        timeOfDay: primaryFilters.timeOfDay,
-                        date: primaryFilters.date,
-                        hour: primaryFilters.hour
-                    ),
+                    baseFilters: comparisonFilters(from: primaryFilters, window: comparisonWindow),
                     group: group,
                     groupBy: groupBy
                 )

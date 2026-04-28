@@ -412,6 +412,13 @@ struct ProtectCadenceCLITests {
     }
 
     @Test
+    func queryCompareHelpMentionsSameWeekdayPriorWeeksMode() {
+        let help = ProtectCadenceHelp.text(for: ["query", "compare", "--help"])
+
+        #expect(help?.contains("--vs-same-weekday-prior-weeks") == true)
+    }
+
+    @Test
     func queryCompareHelpMentionsBoundaryModes() {
         let help = ProtectCadenceHelp.text(for: ["query", "compare", "--help"])
 
@@ -551,6 +558,11 @@ struct ProtectCadenceCLITests {
             "--last-hours", "1",
             "--vs-prior-window",
         ])
+        let sameWeekdayPriorWeeksCLI = try QueryCLI(arguments: [
+            "compare",
+            "--last-hours", "1",
+            "--vs-same-weekday-prior-weeks", "4",
+        ])
 
         #expect(explicitCLI.windowBounds == QueryWindowBounds(
             since: QueryDateParser.parse("2026-03-25T01:00:00Z")!,
@@ -569,6 +581,7 @@ struct ProtectCadenceCLITests {
         #expect(beforeCLI.compareMode == .windowBefore(QueryDateParser.parse("2026-03-24T02:00:00Z")!))
         #expect(afterCLI.compareMode == .windowAfter(QueryDateParser.parse("2026-03-26T04:00:00Z")!))
         #expect(priorCLI.compareMode == .priorWindow)
+        #expect(sameWeekdayPriorWeeksCLI.compareMode == .sameWeekdayPriorWeeks(4))
     }
 
     @Test
@@ -582,7 +595,7 @@ struct ProtectCadenceCLITests {
             ])
             Issue.record("expected conflicting compare mode error")
         } catch let error as QueryCLIError {
-            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window")
+            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-same-weekday-prior-weeks, --vs-window-before, --vs-window-after, or --vs-prior-window")
         }
 
         do {
@@ -594,7 +607,7 @@ struct ProtectCadenceCLITests {
             ])
             Issue.record("expected conflicting compare mode error")
         } catch let error as QueryCLIError {
-            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window")
+            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-same-weekday-prior-weeks, --vs-window-before, --vs-window-after, or --vs-prior-window")
         }
 
         do {
@@ -606,7 +619,7 @@ struct ProtectCadenceCLITests {
             ])
             Issue.record("expected conflicting compare mode error")
         } catch let error as QueryCLIError {
-            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window")
+            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-same-weekday-prior-weeks, --vs-window-before, --vs-window-after, or --vs-prior-window")
         }
 
         do {
@@ -619,7 +632,33 @@ struct ProtectCadenceCLITests {
             ])
             Issue.record("expected explicit/helper compare mode conflict")
         } catch let error as QueryCLIError {
-            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window")
+            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-same-weekday-prior-weeks, --vs-window-before, --vs-window-after, or --vs-prior-window")
+        }
+
+        do {
+            _ = try QueryCLI(arguments: [
+                "compare",
+                "--last-hours", "1",
+                "--vs-same-window-last-week",
+                "--vs-same-weekday-prior-weeks", "4",
+            ])
+            Issue.record("expected same-weekday compare mode conflict")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-same-weekday-prior-weeks, --vs-window-before, --vs-window-after, or --vs-prior-window")
+        }
+    }
+
+    @Test
+    func queryCLIRejectsInvalidSameWeekdayPriorWeekCount() throws {
+        do {
+            _ = try QueryCLI(arguments: [
+                "compare",
+                "--last-hours", "1",
+                "--vs-same-weekday-prior-weeks", "0",
+            ])
+            Issue.record("expected invalid same-weekday prior week count error")
+        } catch let error as QueryCLIError {
+            #expect(error.description == "--vs-same-weekday-prior-weeks must be greater than zero, got '0'")
         }
     }
 
@@ -672,7 +711,7 @@ struct ProtectCadenceCLITests {
             _ = try cli.compareRequest(now: Date(timeIntervalSince1970: 0))
             Issue.record("expected missing compare mode error")
         } catch let error as QueryCLIError {
-            #expect(error.description == "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window")
+            #expect(error.description == "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-same-weekday-prior-weeks, --vs-window-before, --vs-window-after, or --vs-prior-window")
         }
     }
 
@@ -759,6 +798,44 @@ struct ProtectCadenceCLITests {
                 start: localDate(day: 20, hour: 8, minute: 0),
                 end: localDate(day: 20, hour: 9, minute: 30)
             ))
+        }
+    }
+
+    @Test
+    func queryCLIResolvesSameWeekdayPriorWeeksUsingMatchingLocalSpans() throws {
+        try withDefaultTimeZone("America/Los_Angeles") {
+            let cli = try QueryCLI(arguments: [
+                "compare",
+                "--since", "2026-04-27 08:00",
+                "--until", "2026-04-27 10:00",
+                "--vs-same-weekday-prior-weeks", "4",
+            ])
+
+            let request = try cli.compareRequest(now: Date(timeIntervalSince1970: 0))
+
+            #expect(request.compareMode == .sameWeekdayPriorWeeks(4))
+            #expect(request.filters.window == QueryWindow(
+                start: localDate(month: 4, day: 27, hour: 8, minute: 0),
+                end: localDate(month: 4, day: 27, hour: 10, minute: 0)
+            ))
+            #expect(request.comparisonWindows == [
+                QueryWindow(
+                    start: localDate(month: 4, day: 20, hour: 8, minute: 0),
+                    end: localDate(month: 4, day: 20, hour: 10, minute: 0)
+                ),
+                QueryWindow(
+                    start: localDate(month: 4, day: 13, hour: 8, minute: 0),
+                    end: localDate(month: 4, day: 13, hour: 10, minute: 0)
+                ),
+                QueryWindow(
+                    start: localDate(month: 4, day: 6, hour: 8, minute: 0),
+                    end: localDate(month: 4, day: 6, hour: 10, minute: 0)
+                ),
+                QueryWindow(
+                    start: localDate(day: 30, hour: 8, minute: 0),
+                    end: localDate(day: 30, hour: 10, minute: 0)
+                ),
+            ])
         }
     }
 
@@ -1865,6 +1942,189 @@ struct ProtectCadenceCLITests {
             ])
         case .events, .summary:
             Issue.record("expected compare output")
+        }
+    }
+
+    @Test
+    func queryRunnerCompareSupportsSameWeekdayPriorWeeksSeparately() throws {
+        try withDefaultTimeZone("America/Los_Angeles") {
+            let databasePath = temporaryDatabasePath()
+            let database = try ProtectCadenceDatabase(path: databasePath)
+
+            try insertRows(
+                [
+                    EventRow(
+                        timeStart: localDate(month: 4, day: 27, hour: 8, minute: 10),
+                        camera: "Driveway",
+                        kind: "person",
+                        eventID: "window-driveway-person"
+                    ),
+                    EventRow(
+                        timeStart: localDate(month: 4, day: 27, hour: 8, minute: 25),
+                        camera: "Backyard",
+                        kind: "animal",
+                        eventID: "window-backyard-animal"
+                    ),
+                    EventRow(
+                        timeStart: localDate(month: 4, day: 20, hour: 8, minute: 10),
+                        camera: "Driveway",
+                        kind: "person",
+                        eventID: "week-1-driveway-person"
+                    ),
+                    EventRow(
+                        timeStart: localDate(month: 4, day: 20, hour: 8, minute: 40),
+                        camera: "Porch",
+                        kind: "package",
+                        eventID: "week-1-porch-package"
+                    ),
+                    EventRow(
+                        timeStart: localDate(month: 4, day: 13, hour: 8, minute: 20),
+                        camera: "Backyard",
+                        kind: "animal",
+                        eventID: "week-2-backyard-animal"
+                    ),
+                    EventRow(
+                        timeStart: localDate(day: 30, hour: 9, minute: 15),
+                        camera: "Driveway",
+                        kind: "vehicle",
+                        eventID: "week-4-driveway-vehicle"
+                    ),
+                ],
+                into: database
+            )
+
+            let output = try ProtectCadenceQueryRunner.run(
+                arguments: [
+                    "compare",
+                    "--db", databasePath,
+                    "--since", "2026-04-27 08:00",
+                    "--until", "2026-04-27 10:00",
+                    "--vs-same-weekday-prior-weeks", "4",
+                    "--group-by", "camera",
+                    "--group-by", "kind",
+                ]
+            )
+
+            switch output {
+            case let .compare(response):
+                let peers = try #require(response.comparisonPeers)
+                #expect(peers.count == 4)
+                #expect(response.comparisonWindow == QueryWindow(
+                    start: localDate(month: 4, day: 20, hour: 8, minute: 0),
+                    end: localDate(month: 4, day: 20, hour: 10, minute: 0)
+                ))
+                #expect(response.comparisonTotals == CompareCounts(eventCount: 2, sourceEventCount: 2))
+                #expect(response.groups == peers[0].groups)
+                #expect(peers.map(\.comparisonWindow) == [
+                    QueryWindow(
+                        start: localDate(month: 4, day: 20, hour: 8, minute: 0),
+                        end: localDate(month: 4, day: 20, hour: 10, minute: 0)
+                    ),
+                    QueryWindow(
+                        start: localDate(month: 4, day: 13, hour: 8, minute: 0),
+                        end: localDate(month: 4, day: 13, hour: 10, minute: 0)
+                    ),
+                    QueryWindow(
+                        start: localDate(month: 4, day: 6, hour: 8, minute: 0),
+                        end: localDate(month: 4, day: 6, hour: 10, minute: 0)
+                    ),
+                    QueryWindow(
+                        start: localDate(day: 30, hour: 8, minute: 0),
+                        end: localDate(day: 30, hour: 10, minute: 0)
+                    ),
+                ])
+                #expect(peers[0].groups == [
+                    compareGroup(
+                        group: ["camera": "Backyard", "kind": "animal"],
+                        window: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                        comparisonWindow: CompareCounts(eventCount: 0, sourceEventCount: 0),
+                        eventCountDelta: 1,
+                        sourceEventCountDelta: 1,
+                        windowFilters: QueryFilters(
+                            window: QueryWindow(
+                                start: localDate(month: 4, day: 27, hour: 8, minute: 0),
+                                end: localDate(month: 4, day: 27, hour: 10, minute: 0)
+                            ),
+                            cameras: ["Backyard"],
+                            kinds: ["animal"]
+                        ),
+                        comparisonFilters: QueryFilters(
+                            window: QueryWindow(
+                                start: localDate(month: 4, day: 20, hour: 8, minute: 0),
+                                end: localDate(month: 4, day: 20, hour: 10, minute: 0)
+                            ),
+                            cameras: ["Backyard"],
+                            kinds: ["animal"]
+                        )
+                    ),
+                    compareGroup(
+                        group: ["camera": "Driveway", "kind": "person"],
+                        window: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                        comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                        eventCountDelta: 0,
+                        sourceEventCountDelta: 0,
+                        windowFilters: QueryFilters(
+                            window: QueryWindow(
+                                start: localDate(month: 4, day: 27, hour: 8, minute: 0),
+                                end: localDate(month: 4, day: 27, hour: 10, minute: 0)
+                            ),
+                            cameras: ["Driveway"],
+                            kinds: ["person"]
+                        ),
+                        comparisonFilters: QueryFilters(
+                            window: QueryWindow(
+                                start: localDate(month: 4, day: 20, hour: 8, minute: 0),
+                                end: localDate(month: 4, day: 20, hour: 10, minute: 0)
+                            ),
+                            cameras: ["Driveway"],
+                            kinds: ["person"]
+                        )
+                    ),
+                    compareGroup(
+                        group: ["camera": "Porch", "kind": "package"],
+                        window: CompareCounts(eventCount: 0, sourceEventCount: 0),
+                        comparisonWindow: CompareCounts(eventCount: 1, sourceEventCount: 1),
+                        eventCountDelta: -1,
+                        sourceEventCountDelta: -1,
+                        windowFilters: QueryFilters(
+                            window: QueryWindow(
+                                start: localDate(month: 4, day: 27, hour: 8, minute: 0),
+                                end: localDate(month: 4, day: 27, hour: 10, minute: 0)
+                            ),
+                            cameras: ["Porch"],
+                            kinds: ["package"]
+                        ),
+                        comparisonFilters: QueryFilters(
+                            window: QueryWindow(
+                                start: localDate(month: 4, day: 20, hour: 8, minute: 0),
+                                end: localDate(month: 4, day: 20, hour: 10, minute: 0)
+                            ),
+                            cameras: ["Porch"],
+                            kinds: ["package"]
+                        )
+                    ),
+                ])
+                #expect(peers[2].comparisonTotals == CompareCounts(eventCount: 0, sourceEventCount: 0))
+                #expect(peers[2].groups.map(\.comparisonWindow) == [
+                    CompareCounts(eventCount: 0, sourceEventCount: 0),
+                    CompareCounts(eventCount: 0, sourceEventCount: 0),
+                ])
+
+                let json = try JSONOutput.encode(output)
+                #expect(json.contains("\"comparisonPeers\""))
+                #expect(json.contains("\"index\" : 4"))
+
+                let text = try ProtectCadenceOutputRenderer.render(
+                    output: .query(output),
+                    format: .text,
+                    stdoutIsTTY: false
+                )
+                #expect(text.contains("Comparison windows: 4"))
+                #expect(text.contains("Comparison 4"))
+                #expect(text.contains("vehicle"))
+            case .events, .summary:
+                Issue.record("expected compare output")
+            }
         }
     }
 

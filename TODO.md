@@ -13,7 +13,7 @@
 - Add new summary dimensions only when current descriptive distributions
   (`camera`, `kind`, `date`, `hour`, and `weekday`) cannot answer a real question cleanly.
 - Extend comparison helpers only while they stay descriptive and evidence-oriented.
-  Likely next shapes: same weekday across prior weeks, before/after a specific change, or one camera versus another camera.
+  Likely next shapes: before/after a specific change or one camera versus another camera.
 - Preserve zero and empty buckets whenever the peer slice had activity so absences remain queryable evidence.
 - Decide whether named periods such as `dawn`, `day`, `dusk`, and `night` are clear enough to justify first-class filters.
 - Revisit quiet-gap or sessionized views only if repeated detections make raw row slices too noisy for downstream tools.

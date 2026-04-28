@@ -142,6 +142,7 @@ public enum CompareMode: Sendable, Equatable {
     case explicitWindow(QueryWindowBounds)
     case sameWindowYesterday
     case sameWindowLastWeek
+    case sameWeekdayPriorWeeks(Int)
     case windowBefore(Date)
     case windowAfter(Date)
     case priorWindow
@@ -151,35 +152,61 @@ public enum CompareMode: Sendable, Equatable {
         now: Date,
         calendar: Calendar = .current
     ) throws -> QueryWindow {
+        try resolveComparisonWindows(
+            primaryWindow: primaryWindow,
+            now: now,
+            calendar: calendar
+        )[0]
+    }
+
+    public func resolveComparisonWindows(
+        primaryWindow: QueryWindow,
+        now: Date,
+        calendar: Calendar = .current
+    ) throws -> [QueryWindow] {
         switch self {
         case let .explicitWindow(bounds):
-            return try bounds.resolve(now: now)
+            return [try bounds.resolve(now: now)]
         case .sameWindowYesterday:
-            return try QueryWindow.shiftedByLocalDays(
+            return [try QueryWindow.shiftedByLocalDays(
                 primaryWindow,
                 days: -1,
                 calendar: calendar
-            )
+            )]
         case .sameWindowLastWeek:
-            return try QueryWindow.shiftedByLocalDays(
+            return [try QueryWindow.shiftedByLocalDays(
                 primaryWindow,
                 days: -7,
                 calendar: calendar
-            )
+            )]
+        case let .sameWeekdayPriorWeeks(weekCount):
+            guard weekCount > 0 else {
+                throw QueryCLIError.invalidPositiveInteger(
+                    flag: "--vs-same-weekday-prior-weeks",
+                    value: String(weekCount)
+                )
+            }
+            return try (1...weekCount).map { weekOffset in
+                try QueryWindow.shiftedByLocalDays(
+                    primaryWindow,
+                    days: -7 * weekOffset,
+                    calendar: calendar
+                )
+            }
         case let .windowBefore(boundary):
             let duration = primaryWindow.end.timeIntervalSince(primaryWindow.start)
-            return QueryWindow(
+            return [QueryWindow(
                 start: boundary.addingTimeInterval(-duration),
                 end: boundary
-            )
+            )]
         case let .windowAfter(boundary):
             let duration = primaryWindow.end.timeIntervalSince(primaryWindow.start)
-            return QueryWindow(
+            return [QueryWindow(
                 start: boundary,
                 end: boundary.addingTimeInterval(duration)
-            )
+            )]
         case .priorWindow:
-            return QueryWindow.priorWindow(matching: primaryWindow)
+            return [QueryWindow.priorWindow(matching: primaryWindow)]
         }
     }
 }
@@ -261,7 +288,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
         case .conflictingWindowFlags:
             return "use either --last-hours or --since/--until, not both"
         case .conflictingComparisonWindowFlags:
-            return "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window"
+            return "use exactly one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-same-weekday-prior-weeks, --vs-window-before, --vs-window-after, or --vs-prior-window"
         case .untilRequiresSince:
             return "--until requires --since"
         case .compareRequiresPrimaryWindow:
@@ -269,7 +296,7 @@ public enum QueryCLIError: Error, CustomStringConvertible {
         case .compareRequiresExplicitWindow:
             return "--vs-since requires --vs-until, and --vs-until requires --vs-since"
         case .compareMissingMode:
-            return "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-window-before, --vs-window-after, or --vs-prior-window"
+            return "compare requires one compare mode: --vs-since/--vs-until, --vs-same-window-yesterday, --vs-same-window-last-week, --vs-same-weekday-prior-weeks, --vs-window-before, --vs-window-after, or --vs-prior-window"
         case let .invalidWindowRange(start, end):
             return "resolved time window must have start earlier than end, got \(QueryDateParser.encode(start)) to \(QueryDateParser.encode(end))"
         }
@@ -572,7 +599,7 @@ public struct QueryCLI: Sendable {
             throw QueryCLIError.compareMissingMode
         }
 
-        let comparisonWindow = try compareMode.resolveComparisonWindow(
+        let comparisonWindows = try compareMode.resolveComparisonWindows(
             primaryWindow: primaryWindow,
             now: now
         )
@@ -580,7 +607,7 @@ public struct QueryCLI: Sendable {
         return CompareRequest(
             filters: filters,
             compareMode: compareMode,
-            comparisonWindow: comparisonWindow,
+            comparisonWindows: comparisonWindows,
             groupBy: groupBy.isEmpty ? [.camera, .kind] : groupBy
         )
     }
@@ -726,6 +753,10 @@ public struct QueryCLI: Sendable {
         let comparisonUntil = try parseTimeBound(options.until, flag: "--vs-until")
         let comparisonWindowBeforeBoundary = try parseTimeBound(options.windowBefore, flag: "--vs-window-before")
         let comparisonWindowAfterBoundary = try parseTimeBound(options.windowAfter, flag: "--vs-window-after")
+        let sameWeekdayPriorWeeks = try parsePositiveInteger(
+            options.sameWeekdayPriorWeeks,
+            flag: "--vs-same-weekday-prior-weeks"
+        )
 
         var comparisonHelperModes: [CompareMode] = []
         if options.sameWindowYesterday {
@@ -733,6 +764,9 @@ public struct QueryCLI: Sendable {
         }
         if options.sameWindowLastWeek {
             comparisonHelperModes.append(.sameWindowLastWeek)
+        }
+        if let sameWeekdayPriorWeeks {
+            comparisonHelperModes.append(.sameWeekdayPriorWeeks(sameWeekdayPriorWeeks))
         }
         if options.priorWindow {
             comparisonHelperModes.append(.priorWindow)

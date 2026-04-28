@@ -71,7 +71,7 @@ public struct ProtectCadenceCLIQuerySummaryCommand: AsyncParsableCommand {
 public struct ProtectCadenceCLIQueryCompareCommand: AsyncParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "compare",
-        abstract: "Compare two time windows using shared filters."
+        abstract: "Compare a primary time window with one or more peer windows using shared filters."
     )
 
     @OptionGroup var databaseOptions: ProtectCadenceDatabasePathOptions

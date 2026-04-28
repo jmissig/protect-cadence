@@ -158,6 +158,12 @@ struct ProtectCadenceCompareModeOptions: ParsableArguments {
     )
     var sameWindowLastWeek = false
 
+    @Option(
+        name: .customLong("vs-same-weekday-prior-weeks"),
+        help: "Compare against this many prior matching local weekday windows."
+    )
+    var sameWeekdayPriorWeeks: Int?
+
     @Flag(
         name: .customLong("vs-prior-window"),
         help: "Use the immediately preceding equal-duration window."

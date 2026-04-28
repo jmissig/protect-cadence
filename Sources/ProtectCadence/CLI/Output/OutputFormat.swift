@@ -300,26 +300,59 @@ private struct HumanReadableOutputRenderer {
 
     private func renderCompare(_ response: CompareResponse) -> String {
         let primaryWindow = response.filters.window.map(format(window:)) ?? "all stored rows"
-        let comparisonWindow = format(window: response.comparisonWindow)
+        let comparisonPeers = response.comparisonPeers ?? [
+            ComparePeer(
+                index: 1,
+                comparisonWindow: response.comparisonWindow,
+                comparisonTotals: response.comparisonTotals,
+                totalEventCountDelta: response.totalEventCountDelta,
+                totalSourceEventCountDelta: response.totalSourceEventCountDelta,
+                groups: response.groups
+            ),
+        ]
 
         var lines = [
             "Compare",
             "Count semantics: \(response.countSemantics.rawValue)",
             "Database: \(response.databasePath)",
             "Primary window: \(primaryWindow)",
-            "Comparison window: \(comparisonWindow)",
-            "Primary totals: \(response.totals.eventCount) events / \(response.totals.sourceEventCount) source",
-            "Comparison totals: \(response.comparisonTotals.eventCount) events / \(response.comparisonTotals.sourceEventCount) source",
-            "Delta: \(signed(response.totalEventCountDelta)) events / \(signed(response.totalSourceEventCountDelta)) source",
-            "Group by: \(response.groupBy.map(displayName(for:)).joined(separator: ", "))",
         ]
+
+        if comparisonPeers.count == 1, let peer = comparisonPeers.first {
+            lines.append("Comparison window: \(format(window: peer.comparisonWindow))")
+            lines.append("Primary totals: \(response.totals.eventCount) events / \(response.totals.sourceEventCount) source")
+            lines.append("Comparison totals: \(peer.comparisonTotals.eventCount) events / \(peer.comparisonTotals.sourceEventCount) source")
+            lines.append("Delta: \(signed(peer.totalEventCountDelta)) events / \(signed(peer.totalSourceEventCountDelta)) source")
+        } else {
+            lines.append("Comparison windows: \(comparisonPeers.count)")
+            lines.append("Primary totals: \(response.totals.eventCount) events / \(response.totals.sourceEventCount) source")
+        }
+        lines.append("Group by: \(response.groupBy.map(displayName(for:)).joined(separator: ", "))")
 
         lines.append(contentsOf: renderFilterLines(response.filters, omitWindow: true))
         lines.append("")
 
-        let headers = response.groupBy.map(displayName(for:)) + ["Events", "Compare", "Delta", "Source", "CmpSrc", "SrcDelta"]
-        let rows = response.groups.map { group in
-            response.groupBy.map { dimension in
+        if comparisonPeers.count == 1, let peer = comparisonPeers.first {
+            lines.append(renderCompareTable(peer.groups, groupBy: response.groupBy))
+        } else {
+            for peer in comparisonPeers {
+                lines.append("Comparison \(peer.index)")
+                lines.append("Window: \(format(window: peer.comparisonWindow))")
+                lines.append("Comparison totals: \(peer.comparisonTotals.eventCount) events / \(peer.comparisonTotals.sourceEventCount) source")
+                lines.append("Delta: \(signed(peer.totalEventCountDelta)) events / \(signed(peer.totalSourceEventCountDelta)) source")
+                lines.append(renderCompareTable(peer.groups, groupBy: response.groupBy))
+                lines.append("")
+            }
+            lines.removeLast()
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func renderCompareTable(_ groups: [CompareGroup], groupBy: [SummaryGroupBy]) -> String {
+        let headers = groupBy.map(displayName(for:)) + ["Events", "Compare", "Delta", "Source", "CmpSrc", "SrcDelta"]
+        let rows = groups.map { group in
+            groupBy.map { dimension in
                 group.group[dimension.rawValue] ?? "-"
             } + [
                 String(group.window.eventCount),
@@ -331,8 +364,7 @@ private struct HumanReadableOutputRenderer {
             ]
         }
 
-        lines.append(renderTable(headers: headers, rows: rows))
-        return lines.joined(separator: "\n")
+        return renderTable(headers: headers, rows: rows)
     }
 
     private func renderModel(_ response: ModelCommandOutput) -> String {

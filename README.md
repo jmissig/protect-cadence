@@ -133,6 +133,10 @@ protect-cadence query summary \
 protect-cadence query compare --last-hours 1 --vs-prior-window
 protect-cadence query compare --last-hours 1 --vs-same-window-last-week
 protect-cadence query compare \
+  --since "2026-04-27 08:00" \
+  --until "2026-04-27 10:00" \
+  --vs-same-weekday-prior-weeks 4
+protect-cadence query compare \
   --since 2026-03-27T00:00:00Z \
   --until 2026-03-28T00:00:00Z \
   --vs-same-window-yesterday \
@@ -145,10 +149,11 @@ Useful semantics:
 - `query events` defaults to `--limit 50`
 - `query summary` defaults to the last 24 hours unless `--date` is used without an explicit window
 - `query compare` requires one primary window plus exactly one comparison mode
+- `--vs-same-weekday-prior-weeks N` compares the primary window to each of the prior `N` matching local weekday windows separately; it does not aggregate them into a baseline
 - `--day-of-week`, `--weekday`, `--weekend`, `--date`, `--hour`, and `--time-of-day` all apply in local machine time
 - counts are normalized event-row counts first; distinct source Protect event counts are reported separately where relevant
 - `query summary --group-by` can be repeated for descriptive distributions such as weekday/hour/camera within one window
-- summaries return observed buckets only; `query compare` preserves zero-count peer buckets when one side of a comparison has activity
+- summaries return observed buckets only; `query compare` preserves zero-count peer buckets when one side of a comparison has activity; multi-peer comparisons preserve those buckets per peer window
 
 ### JSON Output
 
