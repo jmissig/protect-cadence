@@ -6,7 +6,7 @@
 
 The next pattern-intelligence step is not “just expose SQLite to the LLM.” It is to clarify two sibling surfaces:
 
-1. **Explore/audit surface** — read-only SQLite/Datasette-style access for humans and trusted agents to inspect evidence/model databases, debug ingest/model pipelines, facet events/episodes/findings, and discover better questions.
+1. **Explore/inspect surface** — read-only SQLite/Datasette-style access for humans and trusted agents to inspect evidence/model databases, debug ingest/model pipelines, facet events/episodes/findings, and discover better questions.
 2. **Stable verb / evidence-substrate surface** — stable `protect-cadence query` and `model` commands that return bounded JSON/source outputs with explicit semantics, provenance, drill-down descriptors, privacy/join policy, and no improvised arbitrary SQL during normal conversation. Robut composes any higher-level evidence packet or household-facing artifact above this layer.
 
 This treats Dogsheep/Datasette as a practical local personal-data-warehouse precedent while preserving the repo’s central boundary: cameras are sensors, not media surfaces, and downstream tools interpret evidence.
@@ -66,7 +66,7 @@ Its best reusable design lesson is: **attention-worthy is not necessarily meanin
 
 ## Two-surface design
 
-### 1. SQLite / Datasette explore-audit surface
+### 1. SQLite / Datasette explore-inspect surface
 
 Purpose: inspect the evidence and model databases directly when debugging or doing careful research.
 
@@ -155,7 +155,7 @@ This composition gives Robut enough to say “there was unusual entry activity c
 
 Small, practical slices that fit the repo’s current direction:
 
-1. **Document Datasette/read-only audit workflow** — add commands/cautions for opening evidence and model DBs read-only, plus canned SQL for event → episode → finding traceability.
+1. **Document Datasette/read-only exploration workflow** — add commands/cautions for opening evidence and model DBs read-only, plus canned SQL for event → episode → finding traceability.
 2. **Stabilize shared evidence-output fields in docs** — define required fields for model findings JSON: query window, model run, finding type, baseline, support counts, reason features, drill-down commands, privacy notes. Do not require the CLI to emit the final Robut packet.
 3. **Add direct inspection only where needed** — the existing TODO about `state_bucket_stats` and `state_transition_stats` is the right place to decide whether inspection commands are needed; Datasette may cover operator debugging before adding CLI verbs.
 4. **Correction/annotation sketch** — specify, before implementing, how to represent false positives, known special periods, camera rename corrections, and “do not surface” preferences without mutating raw evidence.
@@ -173,7 +173,7 @@ Small, practical slices that fit the repo’s current direction:
 - Use “attention candidate,” “relative to this baseline,” and “drill down if needed” language rather than anomaly/suspicion language.
 - Let humans correct source/model problems without rewriting raw observations: false positive, wrong camera/kind, known delivery/guest/travel period, maintenance day, camera moved/renamed.
 - Keep corrections scoped. “Do not mention driveway package findings unless asked” is different from deleting package evidence.
-- Preserve read-only auditability: derived model DBs may be rebuilt, but source evidence should remain traceable.
+- Preserve read-only inspectability: derived model DBs may be rebuilt, but source evidence should remain traceable.
 
 ## Success test
 
@@ -187,4 +187,4 @@ A good pattern-intelligence answer using `protect-cadence` should be able to ans
 - what is explicitly outside scope?
 - how can a human inspect or correct the model?
 
-If the Datasette/audit surface can debug the pipeline while the stable verb/evidence-substrate surface keeps normal Robut answers bounded, private, and non-creepy, `protect-cadence` is carrying the right part of the broader pattern-intelligence architecture.
+If the Datasette/exploration surface can debug the pipeline while the stable verb/evidence-substrate surface keeps normal Robut answers bounded, private, and non-creepy, `protect-cadence` is carrying the right part of the broader pattern-intelligence architecture.

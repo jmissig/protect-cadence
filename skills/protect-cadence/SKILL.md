@@ -93,6 +93,22 @@ Rules:
 
 ---
 
+## Read-only exploration mode
+
+Normal answers should use stable CLI verbs first. Before writing SQL, run `protect-cadence --help` and relevant subcommand help when semantics are unclear.
+
+Use read-only SQLite/Datasette exploration only for source coverage, table shape, freshness, event → episode → finding traceability, debugging surprising output, or discovering a repeated pattern that may deserve a future CLI/model verb. For canned SQL, Datasette setup, and camera-data privacy boundaries, read `references/read-only-exploration.md` from this skill folder.
+
+Read-only SQL rules:
+- open evidence/model DBs read-only / immutable
+- keep queries narrow and explain the exploration question
+- report counts, freshness, model run metadata, and caveats
+- do not treat ad hoc SQL as the normal chat contract
+- do not infer identity, mood, safety, relationships, or private behavior from detections
+- do not join camera evidence with other personal data unless the user request clearly requires it
+
+---
+
 ## Response
 
 - concise

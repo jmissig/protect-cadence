@@ -155,6 +155,10 @@ Useful semantics:
 - `query summary --group-by` can be repeated for descriptive distributions such as weekday/hour/camera within one window
 - summaries return observed buckets only; `query compare` preserves zero-count peer buckets when one side of a comparison has activity; multi-peer comparisons preserve those buckets per peer window
 
+### Read-Only Exploration
+
+For Datasette-style inspection of the evidence/model SQLite databases, see [Docs/read-only-exploration.md](Docs/read-only-exploration.md). Use stable CLI verbs first for normal Robut/chat answers; use read-only SQL for source coverage, model debugging, and event → episode → finding traceability.
+
 ### JSON Output
 
 Human-readable text is the default. Use JSON explicitly when an agent or script needs the full response shape:
