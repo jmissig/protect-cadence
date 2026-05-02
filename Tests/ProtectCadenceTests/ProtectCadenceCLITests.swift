@@ -6,6 +6,128 @@ import Testing
 @Suite("CLI Surface")
 struct ProtectCadenceCLITests {
     @Test
+    func annotationsCommandWritesSidecarAndListsTargets() async throws {
+        let evidencePath = temporaryDatabasePath()
+        let annotationsPath = temporaryDatabasePath()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let added = try await ProtectCadenceCLIRunner.run(
+            arguments: [
+                "annotations", "add",
+                "--db", evidencePath,
+                "--annotations-db", annotationsPath,
+                "--account", "julian",
+                "--target-kind", "camera",
+                "--target-id", "name:Driveway",
+                "--body", "Construction week made this camera noisy.",
+                "--source", "human",
+            ],
+            now: now
+        )
+
+        switch added {
+        case let .annotations(.add(response)):
+            #expect(response.annotationsDatabasePath == annotationsPath)
+            #expect(response.annotation.account == "julian")
+            #expect(response.annotation.targetKind == "camera")
+            #expect(response.annotation.targetID == "name:Driveway")
+            #expect(response.annotation.body == "Construction week made this camera noisy.")
+            #expect(response.annotation.createdAtISO8601 == "2023-11-14T22:13:20Z")
+        case .ingest, .query, .model, .annotations, .auth, .validate:
+            Issue.record("expected annotations add output")
+        }
+
+        let targets = try await ProtectCadenceCLIRunner.run(
+            arguments: [
+                "annotations", "targets",
+                "--db", evidencePath,
+                "--annotations-db", annotationsPath,
+                "--account", "julian",
+                "--kind", "camera",
+            ]
+        )
+
+        switch targets {
+        case let .annotations(.targets(response)):
+            #expect(response.totalMatchingTargets == 1)
+            #expect(response.targets.first?.kind == "camera")
+            #expect(response.targets.first?.id == "name:Driveway")
+            #expect(response.targets.first?.annotationCount == 1)
+        case .ingest, .query, .model, .annotations, .auth, .validate:
+            Issue.record("expected annotations targets output")
+        }
+    }
+
+    @Test
+    func queryEventsIncludesSidecarAnnotationsUnlessOptedOut() async throws {
+        let evidencePath = temporaryDatabasePath()
+        let annotationsPath = temporaryDatabasePath()
+        let database = try ProtectCadenceDatabase(path: evidencePath)
+        let now = Date(timeIntervalSince1970: 20_000)
+
+        try insertRows(
+            [
+                EventRow(
+                    timeStart: now.addingTimeInterval(-60),
+                    camera: "Driveway",
+                    kind: "person",
+                    eventID: "protect-event-1"
+                ),
+            ],
+            into: database
+        )
+
+        _ = try await ProtectCadenceCLIRunner.run(
+            arguments: [
+                "annotations", "add",
+                "--db", evidencePath,
+                "--annotations-db", annotationsPath,
+                "--target-kind", "event",
+                "--target-id", "event_id:protect-event-1#kind:person",
+                "--body", "Known delivery.",
+            ],
+            now: now
+        )
+
+        let annotated = try await ProtectCadenceCLIRunner.run(
+            arguments: [
+                "query", "events",
+                "--db", evidencePath,
+                "--annotations-db", annotationsPath,
+                "--last-hours", "1",
+            ],
+            now: now
+        )
+
+        switch annotated {
+        case let .query(.events(response)):
+            #expect(response.events.count == 1)
+            #expect(response.events[0].annotations?.first?.body == "Known delivery.")
+        case .ingest, .query, .model, .annotations, .auth, .validate:
+            Issue.record("expected query events output")
+        }
+
+        let optedOut = try await ProtectCadenceCLIRunner.run(
+            arguments: [
+                "query", "events",
+                "--db", evidencePath,
+                "--annotations-db", annotationsPath,
+                "--last-hours", "1",
+                "--no-annotations",
+            ],
+            now: now
+        )
+
+        switch optedOut {
+        case let .query(.events(response)):
+            #expect(response.events.count == 1)
+            #expect(response.events[0].annotations == nil)
+        case .ingest, .query, .model, .annotations, .auth, .validate:
+            Issue.record("expected query events output")
+        }
+    }
+
+    @Test
     func queryRunnerSummaryProducesEncodableSummaryOutput() throws {
         let databasePath = temporaryDatabasePath()
         let database = try ProtectCadenceDatabase(path: databasePath)
@@ -93,7 +215,7 @@ struct ProtectCadenceCLITests {
             case .events, .compare:
                 Issue.record("expected summary output")
             }
-        case .ingest, .model, .auth, .validate:
+        case .ingest, .model, .annotations, .auth, .validate:
             Issue.record("expected query output")
         }
     }
@@ -116,7 +238,7 @@ struct ProtectCadenceCLITests {
             #expect(response.fetchedSourceEventCount == 5)
             #expect(response.normalizedEventCount == 5)
             #expect(response.insertedEventCount == 5)
-        case .query, .model, .auth, .validate:
+        case .query, .model, .annotations, .auth, .validate:
             Issue.record("expected ingest output")
         }
     }
@@ -146,7 +268,7 @@ struct ProtectCadenceCLITests {
             #expect(response.command == "protect-cadence auth")
             #expect(response.action == "status")
             #expect(response.status == "ok")
-        case .ingest, .query, .model, .validate:
+        case .ingest, .query, .model, .annotations, .validate:
             Issue.record("expected auth output")
         }
     }
@@ -173,7 +295,7 @@ struct ProtectCadenceCLITests {
             #expect(response.controllerURL == "https://protect.example")
             #expect(response.username == "setup-user")
             #expect(response.storedPasswordExists)
-        case .ingest, .query, .model, .validate:
+        case .ingest, .query, .model, .annotations, .validate:
             Issue.record("expected auth output")
         }
     }

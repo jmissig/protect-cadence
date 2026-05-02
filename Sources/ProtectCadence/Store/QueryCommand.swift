@@ -454,7 +454,10 @@ enum QueryDateParser {
 public struct QueryCLI: Sendable {
     public let compareMode: CompareMode?
     public let databasePathOverride: String?
+    public let annotationsDatabasePathOverride: String?
     public let configPath: String
+    public let annotationAccount: String
+    public let includeAnnotations: Bool
     public let subcommand: QuerySubcommand
     public let filters: QueryFilters
     public let windowBounds: QueryWindowBounds?
@@ -486,7 +489,10 @@ public struct QueryCLI: Sendable {
         try self.init(
             subcommand: .events,
             databasePathOverride: command.databaseOptions.databasePathOverride,
+            annotationsDatabasePathOverride: command.annotationsOptions.annotationsDatabasePathOverride,
             configPath: command.configOptions.configPath,
+            annotationAccount: command.annotationsOptions.account,
+            includeAnnotations: !command.annotationsOptions.noAnnotations,
             primaryWindow: command.primaryWindow,
             filterOptions: command.filters,
             limit: command.limit,
@@ -500,7 +506,10 @@ public struct QueryCLI: Sendable {
         try self.init(
             subcommand: .summary,
             databasePathOverride: command.databaseOptions.databasePathOverride,
+            annotationsDatabasePathOverride: command.annotationsOptions.annotationsDatabasePathOverride,
             configPath: command.configOptions.configPath,
+            annotationAccount: command.annotationsOptions.account,
+            includeAnnotations: !command.annotationsOptions.noAnnotations,
             primaryWindow: command.primaryWindow,
             filterOptions: command.filters,
             limit: 50,
@@ -514,7 +523,10 @@ public struct QueryCLI: Sendable {
         try self.init(
             subcommand: .compare,
             databasePathOverride: command.databaseOptions.databasePathOverride,
+            annotationsDatabasePathOverride: command.annotationsOptions.annotationsDatabasePathOverride,
             configPath: command.configOptions.configPath,
+            annotationAccount: command.annotationsOptions.account,
+            includeAnnotations: !command.annotationsOptions.noAnnotations,
             primaryWindow: command.primaryWindow,
             filterOptions: command.filters,
             limit: 50,
@@ -527,7 +539,10 @@ public struct QueryCLI: Sendable {
     private init(
         subcommand: QuerySubcommand,
         databasePathOverride: String?,
+        annotationsDatabasePathOverride: String?,
         configPath: String,
+        annotationAccount: String,
+        includeAnnotations: Bool,
         primaryWindow: ProtectCadencePrimaryWindowOptions,
         filterOptions: ProtectCadenceQueryFilterOptions,
         limit: Int,
@@ -564,7 +579,10 @@ public struct QueryCLI: Sendable {
 
         self.compareMode = compareMode
         self.databasePathOverride = databasePathOverride
+        self.annotationsDatabasePathOverride = annotationsDatabasePathOverride
         self.configPath = configPath
+        self.annotationAccount = annotationAccount
+        self.includeAnnotations = includeAnnotations
         self.subcommand = subcommand
         self.filters = try Self.parseFilters(filterOptions)
         self.windowBounds = windowBounds
@@ -931,14 +949,156 @@ public enum ProtectCadenceQueryRunner {
             configPath: cli.configPath
         )
         let database = try ProtectCadenceDatabase(path: databasePath)
+        let annotations = try annotationDatabase(for: cli, evidenceDatabasePath: databasePath)
 
         switch cli.subcommand {
         case .events:
-            return .events(try database.fetchEventsResponse(try cli.eventsRequest(now: now)))
+            return .events(try annotateEvents(
+                try database.fetchEventsResponse(try cli.eventsRequest(now: now)),
+                annotations: annotations,
+                account: cli.annotationAccount
+            ))
         case .summary:
-            return .summary(try database.fetchSummary(try cli.summaryRequest(now: now)))
+            return .summary(try annotateSummary(
+                try database.fetchSummary(try cli.summaryRequest(now: now)),
+                annotations: annotations,
+                account: cli.annotationAccount
+            ))
         case .compare:
-            return .compare(try database.fetchCompare(try cli.compareRequest(now: now)))
+            return .compare(try annotateCompare(
+                try database.fetchCompare(try cli.compareRequest(now: now)),
+                annotations: annotations,
+                account: cli.annotationAccount
+            ))
         }
+    }
+
+    private static func annotationDatabase(
+        for cli: QueryCLI,
+        evidenceDatabasePath: String
+    ) throws -> ProtectCadenceAnnotationsDatabase? {
+        guard cli.includeAnnotations else { return nil }
+        let path = try ProtectCadenceAnnotationsDatabasePathResolver.resolve(
+            explicitOverride: cli.annotationsDatabasePathOverride,
+            evidenceDatabasePath: evidenceDatabasePath,
+            configPath: cli.configPath
+        )
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        return try ProtectCadenceAnnotationsDatabase(path: path)
+    }
+
+    private static func annotateEvents(
+        _ response: EventsResponse,
+        annotations: ProtectCadenceAnnotationsDatabase?,
+        account: String
+    ) throws -> EventsResponse {
+        guard let annotations else { return response }
+        let targets = Set(response.events.flatMap(eventTargets))
+        let annotationsByTarget = try annotations.fetch(account: account, targets: targets)
+        let events = response.events.map { event in
+            event.withAnnotations(mergeAnnotations(eventTargets(event).flatMap { annotationsByTarget[$0] ?? [] }))
+        }
+        return EventsResponse(
+            command: response.command,
+            databasePath: response.databasePath,
+            filters: response.filters,
+            countSemantics: response.countSemantics,
+            events: events
+        )
+    }
+
+    private static func annotateSummary(
+        _ response: SummaryResponse,
+        annotations: ProtectCadenceAnnotationsDatabase?,
+        account: String
+    ) throws -> SummaryResponse {
+        guard let annotations else { return response }
+        let targets = Set(response.groups.flatMap { groupTargets(filters: $0.drillDown.filters) })
+        let annotationsByTarget = try annotations.fetch(account: account, targets: targets)
+        let groups = response.groups.map { group in
+            SummaryGroup(
+                group: group.group,
+                eventCount: group.eventCount,
+                sourceEventCount: group.sourceEventCount,
+                drillDown: group.drillDown,
+                annotations: mergeAnnotations(groupTargets(filters: group.drillDown.filters).flatMap { annotationsByTarget[$0] ?? [] })
+            )
+        }
+        return SummaryResponse(
+            command: response.command,
+            databasePath: response.databasePath,
+            filters: response.filters,
+            countSemantics: response.countSemantics,
+            totalEventCount: response.totalEventCount,
+            totalSourceEventCount: response.totalSourceEventCount,
+            groupBy: response.groupBy,
+            groups: groups
+        )
+    }
+
+    private static func annotateCompare(
+        _ response: CompareResponse,
+        annotations: ProtectCadenceAnnotationsDatabase?,
+        account: String
+    ) throws -> CompareResponse {
+        guard let annotations else { return response }
+        let groups = response.groups
+        let peerGroups = response.comparisonPeers?.flatMap(\.groups) ?? []
+        let targets = Set((groups + peerGroups).flatMap { groupTargets(filters: $0.windowDrillDown.filters) })
+        let annotationsByTarget = try annotations.fetch(account: account, targets: targets)
+        func annotate(_ group: CompareGroup) -> CompareGroup {
+            CompareGroup(
+                group: group.group,
+                window: group.window,
+                comparisonWindow: group.comparisonWindow,
+                eventCountDelta: group.eventCountDelta,
+                sourceEventCountDelta: group.sourceEventCountDelta,
+                windowDrillDown: group.windowDrillDown,
+                comparisonWindowDrillDown: group.comparisonWindowDrillDown,
+                annotations: mergeAnnotations(groupTargets(filters: group.windowDrillDown.filters).flatMap { annotationsByTarget[$0] ?? [] })
+            )
+        }
+        let comparisonPeers = response.comparisonPeers?.map { peer in
+            ComparePeer(
+                index: peer.index,
+                comparisonWindow: peer.comparisonWindow,
+                comparisonTotals: peer.comparisonTotals,
+                totalEventCountDelta: peer.totalEventCountDelta,
+                totalSourceEventCountDelta: peer.totalSourceEventCountDelta,
+                groups: peer.groups.map(annotate)
+            )
+        }
+        return CompareResponse(
+            command: response.command,
+            databasePath: response.databasePath,
+            filters: response.filters,
+            comparisonWindow: response.comparisonWindow,
+            countSemantics: response.countSemantics,
+            groupBy: response.groupBy,
+            totals: response.totals,
+            comparisonTotals: response.comparisonTotals,
+            totalEventCountDelta: response.totalEventCountDelta,
+            totalSourceEventCountDelta: response.totalSourceEventCountDelta,
+            groups: response.groups.map(annotate),
+            comparisonPeers: comparisonPeers
+        )
+    }
+
+    private static func eventTargets(_ event: EventRow) -> [AnnotationLookupTarget] {
+        AnnotationTargetFactory.cameraTargets(camera: event.camera, cameraID: event.cameraID)
+            + [AnnotationTargetFactory.eventTarget(eventID: event.eventID, kind: event.kind)]
+    }
+
+    private static func groupTargets(filters: QueryFilters) -> [AnnotationLookupTarget] {
+        filters.cameras.flatMap { AnnotationTargetFactory.cameraTargets(camera: $0, cameraID: nil) }
+    }
+
+    private static func mergeAnnotations(_ annotations: [Annotation]) -> [Annotation]? {
+        var seen = Set<Int64>()
+        var merged: [Annotation] = []
+        for annotation in annotations where seen.insert(annotation.id).inserted {
+            merged.append(annotation)
+        }
+        return merged.isEmpty ? nil : merged
     }
 }

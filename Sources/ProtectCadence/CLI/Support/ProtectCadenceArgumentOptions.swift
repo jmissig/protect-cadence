@@ -25,6 +25,26 @@ struct ProtectCadenceModelDatabasePathOptions: ParsableArguments {
     var modelDatabasePathOverride: String?
 }
 
+struct ProtectCadenceAnnotationsOptions: ParsableArguments {
+    @Option(
+        name: .customLong("annotations-db"),
+        help: "Override writable sidecar SQLite path for annotations."
+    )
+    var annotationsDatabasePathOverride: String?
+
+    @Option(
+        name: .customLong("account"),
+        help: "Annotation account namespace. Default 'default'."
+    )
+    var account = "default"
+
+    @Flag(
+        name: .customLong("no-annotations"),
+        help: "Do not include inline annotations."
+    )
+    var noAnnotations = false
+}
+
 struct ProtectCadenceAuthOverrideOptions: ParsableArguments {
     @Option(
         name: .customLong("controller-url"),

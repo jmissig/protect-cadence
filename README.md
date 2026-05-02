@@ -106,6 +106,10 @@ protect-cadence query compare
 protect-cadence model rebuild
 protect-cadence model episodes
 protect-cadence model findings
+protect-cadence annotations add
+protect-cadence annotations list
+protect-cadence annotations kinds
+protect-cadence annotations targets
 protect-cadence auth status
 protect-cadence auth login
 protect-cadence setup  # alias for auth login
@@ -171,6 +175,33 @@ protect-cadence validate --format json
 ```
 
 `query summary` and `query compare` JSON responses include drill-down descriptors that point back to the matching `query events` slice.
+
+### Annotations
+
+Annotations are writable sidecar context, stored separately from the read-mostly evidence database. By default the sidecar path is a sibling of the evidence DB, such as `protect-cadence-annotations.sqlite`. Use `--annotations-db` to override it.
+
+```bash
+protect-cadence annotations kinds --format json
+protect-cadence annotations targets --account default --format json
+protect-cadence annotations add \
+  --account default \
+  --target-kind camera \
+  --target-id name:Driveway \
+  --body "Driveway detections during construction week are noisy; do not treat them as a new routine." \
+  --source human
+protect-cadence annotations list --target-kind camera --target-id name:Driveway --format json
+```
+
+Supported target kinds are `camera`, `event`, `episode`, `finding`, `zone`, `context`, and `window`. Prefer stable target IDs when they exist:
+
+- `camera`: `id:<camera-id>` or `name:<camera-name>`
+- `event`: `event_id:<protect-event-id>#kind:<kind>`
+- `episode`: `run:<run-id>/episode:<episode-id>`
+- `finding`: `run:<run-id>/finding:<finding-id>`
+- `context`: handles such as `family-privacy` or `school-morning`
+- `window`: explicit local conventions such as `window:school-morning` or a documented time range
+
+Query/model outputs include matching annotations by default where they naturally encounter the target. Use `--no-annotations` on supported query/model commands to omit them.
 
 ## Protect Boundary
 

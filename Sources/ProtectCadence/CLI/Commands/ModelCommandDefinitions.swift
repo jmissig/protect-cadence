@@ -55,6 +55,7 @@ public struct ProtectCadenceCLIModelEpisodesCommand: AsyncParsableCommand {
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceModelFilterOptions
+    @OptionGroup var annotationsOptions: ProtectCadenceAnnotationsOptions
     @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("limit"), help: "Maximum episodes to return. Default 50.")
@@ -84,6 +85,7 @@ public struct ProtectCadenceCLIModelFindingsCommand: AsyncParsableCommand {
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceModelFilterOptions
+    @OptionGroup var annotationsOptions: ProtectCadenceAnnotationsOptions
     @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(

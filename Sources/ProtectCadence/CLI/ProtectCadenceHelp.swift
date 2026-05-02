@@ -19,6 +19,16 @@ public enum ProtectCadenceHelp {
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIQueryCommand.self)
         case ["model"]:
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIModelCommand.self)
+        case ["annotations"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIAnnotationsCommand.self)
+        case ["annotations", "add"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIAnnotationsAddCommand.self)
+        case ["annotations", "list"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIAnnotationsListCommand.self)
+        case ["annotations", "kinds"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIAnnotationsKindsCommand.self)
+        case ["annotations", "targets"]:
+            return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIAnnotationsTargetsCommand.self)
         case ["model", "rebuild"]:
             return ProtectCadenceCLICommand.helpMessage(for: ProtectCadenceCLIModelRebuildCommand.self)
         case ["model", "episodes"]:

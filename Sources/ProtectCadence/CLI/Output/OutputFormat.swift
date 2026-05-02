@@ -99,6 +99,8 @@ private struct HumanReadableOutputRenderer {
             return renderQuery(response)
         case let .model(response):
             return renderModel(response)
+        case let .annotations(response):
+            return renderAnnotations(response)
         case let .auth(response):
             return renderAuth(response)
         case let .validate(response):
@@ -375,6 +377,51 @@ private struct HumanReadableOutputRenderer {
             return renderModelEpisodes(episodes)
         case let .findings(findings):
             return renderModelFindings(findings)
+        }
+    }
+
+    private func renderAnnotations(_ response: AnnotationCommandOutput) -> String {
+        switch response {
+        case let .kinds(kinds):
+            return (["annotations kinds"] + kinds.kinds.map { "- \($0)" }).joined(separator: "\n")
+        case let .targets(targets):
+            var lines = [
+                "annotations targets",
+                "account: \(targets.account)",
+                "annotations DB: \(targets.annotationsDatabasePath)",
+                "kind: \(targets.kind ?? "all")",
+                "total matching targets: \(targets.totalMatchingTargets)",
+                "returned targets: \(targets.returnedTargets)",
+            ]
+            for target in targets.targets {
+                lines.append("- \(target.kind):\(target.id) annotations=\(target.annotationCount) updated_at=\(target.lastUpdatedAtISO8601 ?? "unknown")")
+            }
+            return lines.joined(separator: "\n")
+        case let .add(add):
+            return [
+                "annotations add",
+                "account: \(add.account)",
+                "annotations DB: \(add.annotationsDatabasePath)",
+                "annotation id: \(add.annotation.id)",
+                "target: \(add.annotation.targetKind):\(add.annotation.targetID)",
+                "source: \(add.annotation.source)",
+                "created at: \(add.annotation.createdAtISO8601)",
+                "body: \(add.annotation.body)",
+            ].joined(separator: "\n")
+        case let .list(list):
+            var lines = [
+                "annotations list",
+                "account: \(list.account)",
+                "annotations DB: \(list.annotationsDatabasePath)",
+                "target: \(list.target.kind.map { "\($0):\(list.target.id ?? "")" } ?? "all")",
+                "total matching annotations: \(list.totalMatchingAnnotations)",
+                "returned annotations: \(list.returnedAnnotations)",
+            ]
+            for annotation in list.annotations {
+                lines.append("- \(annotation.targetKind):\(annotation.targetID) annotation_id=\(annotation.id) source=\(annotation.source) updated_at=\(annotation.updatedAtISO8601)")
+                lines.append("  body: \(annotation.body)")
+            }
+            return lines.joined(separator: "\n")
         }
     }
 

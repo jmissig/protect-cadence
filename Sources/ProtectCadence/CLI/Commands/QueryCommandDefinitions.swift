@@ -25,6 +25,7 @@ public struct ProtectCadenceCLIQueryEventsCommand: AsyncParsableCommand {
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceQueryFilterOptions
+    @OptionGroup var annotationsOptions: ProtectCadenceAnnotationsOptions
     @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("limit"), help: "Row limit. Default 50.")
@@ -53,6 +54,7 @@ public struct ProtectCadenceCLIQuerySummaryCommand: AsyncParsableCommand {
     @OptionGroup var configOptions: ProtectCadenceConfigPathOptions
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceQueryFilterOptions
+    @OptionGroup var annotationsOptions: ProtectCadenceAnnotationsOptions
     @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("group-by"), help: "Repeatable grouping: camera, kind, date, hour, or weekday.")
@@ -79,6 +81,7 @@ public struct ProtectCadenceCLIQueryCompareCommand: AsyncParsableCommand {
     @OptionGroup var primaryWindow: ProtectCadencePrimaryWindowOptions
     @OptionGroup var filters: ProtectCadenceQueryFilterOptions
     @OptionGroup var compareMode: ProtectCadenceCompareModeOptions
+    @OptionGroup var annotationsOptions: ProtectCadenceAnnotationsOptions
     @OptionGroup var outputOptions: ProtectCadenceOutputOptions
 
     @Option(name: .customLong("group-by"), help: "Repeatable grouping: camera, kind, date, hour, or weekday.")

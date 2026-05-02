@@ -80,18 +80,34 @@ Example notes:
 - Event note: “This person detection was a known delivery, not unusual household activity.”
 - Privacy note: “In family/shared answers, summarize this camera at a high level only.”
 
-Store the note somewhere human-readable first: Obsidian, profile memory, or a small sidecar only when retrieval needs it. Raw detections stay immutable. The CLI may use explicit ignore/noise notes as filters later, but it should not infer the note’s meaning itself.
+Store durable machine-retrievable notes in the annotations sidecar database, not in the source evidence database. Raw detections stay immutable and can remain read-only to Robut. The CLI may use explicit ignore/noise notes as filters later, but it should not infer the note’s meaning itself.
 
-If this later becomes machine-readable, keep the durable shape minimal:
+The durable shape intentionally mirrors `swarm-cadence`:
 
 ```text
-attached_to: <camera/event/window/model finding/audience policy>
-note: <plain English human note>
-source: <human/chat/note>
-updated_at: <timestamp>
+id
+account
+target_kind
+target_id
+body
+source
+created_at
+updated_at
 ```
 
-That is enough for Robut to find the note and reason from it.
+Supported target kinds are `camera`, `event`, `episode`, `finding`, `zone`, `context`, and `window`.
+
+Target ID conventions:
+
+- `camera`: prefer `id:<camera-id>` when available; use `name:<camera name>` when the camera ID is unavailable or a human naturally names the camera.
+- `event`: use `event_id:<protect-event-id>#kind:<kind>` because one Protect event can produce multiple normalized kind rows.
+- `episode`: use `run:<run-id>/episode:<episode-id>`; this is rebuild-scoped, not timeless evidence.
+- `finding`: use `run:<run-id>/finding:<finding-id>`; this is rebuild-scoped and should be used for commentary on a specific model output.
+- `window`: use a documented handle such as `window:school-morning`, or an explicit convention including camera/kind/since/until when the note is about a bounded slice.
+- `context`: use durable handles such as `family-privacy`, `school-morning`, or `construction-week`.
+- `zone`: reserve for stable Protect zone identifiers once those are modeled.
+
+That is enough for Robut to find the note and reason from it without rewriting source evidence.
 
 ## Actionable next slices
 

@@ -19,6 +19,7 @@ public struct ProtectCadenceCLICommand: AsyncParsableCommand {
           protect-cadence model rebuild
           protect-cadence model findings --finding-type unexpected_presence
           protect-cadence model findings --finding-type unexpected_transition
+          protect-cadence annotations add --target-kind camera --target-id id:<camera-id> --body "Plain-English caveat"
           protect-cadence setup --controller-url https://protect.example --username agent
         """,
         version: protectCadenceCLIVersion,
@@ -26,6 +27,7 @@ public struct ProtectCadenceCLICommand: AsyncParsableCommand {
             ProtectCadenceCLIIngestCommand.self,
             ProtectCadenceCLIQueryCommand.self,
             ProtectCadenceCLIModelCommand.self,
+            ProtectCadenceCLIAnnotationsCommand.self,
             ProtectCadenceCLIAuthCommand.self,
             ProtectCadenceCLISetupCommand.self,
             ProtectCadenceCLIValidateCommand.self,

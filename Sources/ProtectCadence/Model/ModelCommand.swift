@@ -100,6 +100,7 @@ public struct ModelEpisode: Codable, Sendable, Equatable {
     public let kinds: [ModelEpisodeKind]
     public let eventRowIDs: [Int64]
     public let sourceEventIDs: [String]
+    public let annotations: [Annotation]?
 
     public init(
         id: Int64,
@@ -117,7 +118,8 @@ public struct ModelEpisode: Codable, Sendable, Equatable {
         dayClass: ModelDayClass,
         kinds: [ModelEpisodeKind],
         eventRowIDs: [Int64],
-        sourceEventIDs: [String]
+        sourceEventIDs: [String],
+        annotations: [Annotation]? = nil
     ) {
         self.id = id
         self.camera = camera
@@ -135,6 +137,7 @@ public struct ModelEpisode: Codable, Sendable, Equatable {
         self.kinds = kinds
         self.eventRowIDs = eventRowIDs
         self.sourceEventIDs = sourceEventIDs
+        self.annotations = annotations
     }
 }
 
@@ -164,6 +167,7 @@ public struct ModelFinding: Codable, Sendable, Equatable {
     public let expectedGapSeconds: Double?
     public let linkedEpisodeIDs: [Int64]
     public let audit: ModelFindingAudit?
+    public let annotations: [Annotation]?
 
     public init(
         id: Int64,
@@ -190,7 +194,8 @@ public struct ModelFinding: Codable, Sendable, Equatable {
         observedGapSeconds: Int?,
         expectedGapSeconds: Double?,
         linkedEpisodeIDs: [Int64],
-        audit: ModelFindingAudit? = nil
+        audit: ModelFindingAudit? = nil,
+        annotations: [Annotation]? = nil
     ) {
         self.id = id
         self.findingType = findingType
@@ -217,6 +222,7 @@ public struct ModelFinding: Codable, Sendable, Equatable {
         self.expectedGapSeconds = expectedGapSeconds
         self.linkedEpisodeIDs = linkedEpisodeIDs
         self.audit = audit
+        self.annotations = annotations
     }
 }
 
@@ -611,6 +617,9 @@ public struct ModelCLI: Sendable {
     public let configPath: String
     public let sourceDatabasePathOverride: String?
     public let modelDatabasePathOverride: String?
+    public let annotationsDatabasePathOverride: String?
+    public let annotationAccount: String
+    public let includeAnnotations: Bool
     public let windowBounds: QueryWindowBounds?
     public let lastHours: Int?
     public let cameras: [String]
@@ -643,6 +652,9 @@ public struct ModelCLI: Sendable {
         self.configPath = command.configOptions.configPath
         self.sourceDatabasePathOverride = command.databaseOptions.databasePathOverride
         self.modelDatabasePathOverride = command.modelDatabaseOptions.modelDatabasePathOverride
+        self.annotationsDatabasePathOverride = nil
+        self.annotationAccount = "default"
+        self.includeAnnotations = false
         self.windowBounds = nil
         self.lastHours = nil
         self.cameras = []
@@ -662,6 +674,9 @@ public struct ModelCLI: Sendable {
         self.configPath = command.configOptions.configPath
         self.sourceDatabasePathOverride = command.databaseOptions.databasePathOverride
         self.modelDatabasePathOverride = command.modelDatabaseOptions.modelDatabasePathOverride
+        self.annotationsDatabasePathOverride = command.annotationsOptions.annotationsDatabasePathOverride
+        self.annotationAccount = command.annotationsOptions.account
+        self.includeAnnotations = !command.annotationsOptions.noAnnotations
         self.windowBounds = windowResolution.bounds
         self.lastHours = windowResolution.lastHours
         self.cameras = command.filters.cameras
@@ -681,6 +696,9 @@ public struct ModelCLI: Sendable {
         self.configPath = command.configOptions.configPath
         self.sourceDatabasePathOverride = command.databaseOptions.databasePathOverride
         self.modelDatabasePathOverride = command.modelDatabaseOptions.modelDatabasePathOverride
+        self.annotationsDatabasePathOverride = command.annotationsOptions.annotationsDatabasePathOverride
+        self.annotationAccount = command.annotationsOptions.account
+        self.includeAnnotations = !command.annotationsOptions.noAnnotations
         self.windowBounds = windowResolution.bounds
         self.lastHours = windowResolution.lastHours
         self.cameras = command.filters.cameras
@@ -2412,6 +2430,7 @@ public enum ProtectCadenceModelRunner {
         case .episodes:
             let modelDatabase = try ProtectCadenceModelDatabase(path: modelDatabasePath)
             let metadata = try modelDatabase.latestBuildMetadata()
+            let annotations = try annotationDatabase(for: cli, evidenceDatabasePath: metadata.sourceDatabasePath)
             return .episodes(
                 ModelEpisodesResponse(
                     command: ProtectCadenceCommand.model.rawValue,
@@ -2425,12 +2444,18 @@ public enum ProtectCadenceModelRunner {
                     stateKeys: cli.stateKeys,
                     limit: cli.limit,
                     order: cli.order,
-                    episodes: try modelDatabase.fetchEpisodes(try cli.episodesRequest(now: now))
+                    episodes: try annotateEpisodes(
+                        try modelDatabase.fetchEpisodes(try cli.episodesRequest(now: now)),
+                        build: metadata,
+                        annotations: annotations,
+                        account: cli.annotationAccount
+                    )
                 )
             )
         case .findings:
             let modelDatabase = try ProtectCadenceModelDatabase(path: modelDatabasePath)
             let metadata = try modelDatabase.latestBuildMetadata()
+            let annotations = try annotationDatabase(for: cli, evidenceDatabasePath: metadata.sourceDatabasePath)
             return .findings(
                 ModelFindingsResponse(
                     command: ProtectCadenceCommand.model.rawValue,
@@ -2443,9 +2468,123 @@ public enum ProtectCadenceModelRunner {
                     kinds: cli.kinds,
                     findingTypes: cli.findingTypes,
                     limit: cli.limit,
-                    findings: try modelDatabase.fetchFindings(try cli.findingsRequest(now: now))
+                    findings: try annotateFindings(
+                        try modelDatabase.fetchFindings(try cli.findingsRequest(now: now)),
+                        build: metadata,
+                        annotations: annotations,
+                        account: cli.annotationAccount
+                    )
                 )
             )
         }
+    }
+
+    private static func annotationDatabase(
+        for cli: ModelCLI,
+        evidenceDatabasePath: String
+    ) throws -> ProtectCadenceAnnotationsDatabase? {
+        guard cli.includeAnnotations else { return nil }
+        let path = try ProtectCadenceAnnotationsDatabasePathResolver.resolve(
+            explicitOverride: cli.annotationsDatabasePathOverride,
+            evidenceDatabasePath: evidenceDatabasePath,
+            configPath: cli.configPath
+        )
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        return try ProtectCadenceAnnotationsDatabase(path: path)
+    }
+
+    private static func annotateEpisodes(
+        _ episodes: [ModelEpisode],
+        build: ModelBuildMetadata,
+        annotations: ProtectCadenceAnnotationsDatabase?,
+        account: String
+    ) throws -> [ModelEpisode] {
+        guard let annotations else { return episodes }
+        let targets = Set(episodes.flatMap { episodeTargets($0, build: build) })
+        let annotationsByTarget = try annotations.fetch(account: account, targets: targets)
+        return episodes.map { episode in
+            ModelEpisode(
+                id: episode.id,
+                camera: episode.camera,
+                cameraID: episode.cameraID,
+                primaryKind: episode.primaryKind,
+                stateKey: episode.stateKey,
+                startTime: episode.startTime,
+                endTime: episode.endTime,
+                durationSeconds: episode.durationSeconds,
+                eventCount: episode.eventCount,
+                sourceEventCount: episode.sourceEventCount,
+                containsUnsettled: episode.containsUnsettled,
+                hourOfDay: episode.hourOfDay,
+                dayClass: episode.dayClass,
+                kinds: episode.kinds,
+                eventRowIDs: episode.eventRowIDs,
+                sourceEventIDs: episode.sourceEventIDs,
+                annotations: mergeAnnotations(episodeTargets(episode, build: build).flatMap { annotationsByTarget[$0] ?? [] })
+            )
+        }
+    }
+
+    private static func annotateFindings(
+        _ findings: [ModelFinding],
+        build: ModelBuildMetadata,
+        annotations: ProtectCadenceAnnotationsDatabase?,
+        account: String
+    ) throws -> [ModelFinding] {
+        guard let annotations else { return findings }
+        let targets = Set(findings.flatMap { findingTargets($0, build: build) })
+        let annotationsByTarget = try annotations.fetch(account: account, targets: targets)
+        return findings.map { finding in
+            ModelFinding(
+                id: finding.id,
+                findingType: finding.findingType,
+                camera: finding.camera,
+                primaryKind: finding.primaryKind,
+                stateKey: finding.stateKey,
+                episodeID: finding.episodeID,
+                episodeStartTime: finding.episodeStartTime,
+                episodeEndTime: finding.episodeEndTime,
+                hourOfDay: finding.hourOfDay,
+                dayClass: finding.dayClass,
+                score: finding.score,
+                bucketEpisodeCount: finding.bucketEpisodeCount,
+                stateEpisodeCount: finding.stateEpisodeCount,
+                observedDurationSeconds: finding.observedDurationSeconds,
+                expectedDurationSeconds: finding.expectedDurationSeconds,
+                durationDirection: finding.durationDirection,
+                previousEpisodeID: finding.previousEpisodeID,
+                previousPrimaryKind: finding.previousPrimaryKind,
+                previousStateKey: finding.previousStateKey,
+                transitionBucketCount: finding.transitionBucketCount,
+                transitionPairCount: finding.transitionPairCount,
+                observedGapSeconds: finding.observedGapSeconds,
+                expectedGapSeconds: finding.expectedGapSeconds,
+                linkedEpisodeIDs: finding.linkedEpisodeIDs,
+                audit: finding.audit,
+                annotations: mergeAnnotations(findingTargets(finding, build: build).flatMap { annotationsByTarget[$0] ?? [] })
+            )
+        }
+    }
+
+    private static func episodeTargets(_ episode: ModelEpisode, build: ModelBuildMetadata) -> [AnnotationLookupTarget] {
+        AnnotationTargetFactory.cameraTargets(camera: episode.camera, cameraID: episode.cameraID)
+            + [AnnotationTargetFactory.episodeTarget(runID: build.runID, episodeID: episode.id)]
+    }
+
+    private static func findingTargets(_ finding: ModelFinding, build: ModelBuildMetadata) -> [AnnotationLookupTarget] {
+        AnnotationTargetFactory.cameraTargets(camera: finding.camera, cameraID: nil)
+            + [
+                AnnotationTargetFactory.findingTarget(runID: build.runID, findingID: finding.id),
+                AnnotationTargetFactory.episodeTarget(runID: build.runID, episodeID: finding.episodeID),
+            ]
+    }
+
+    private static func mergeAnnotations(_ annotations: [Annotation]) -> [Annotation]? {
+        var seen = Set<Int64>()
+        var merged: [Annotation] = []
+        for annotation in annotations where seen.insert(annotation.id).inserted {
+            merged.append(annotation)
+        }
+        return merged.isEmpty ? nil : merged
     }
 }

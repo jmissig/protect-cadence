@@ -4,6 +4,7 @@ public enum ProtectCadenceSubcommand: String, Sendable {
     case ingest
     case query
     case model
+    case annotations
     case auth
     case setup
     case validate
@@ -17,7 +18,7 @@ public enum ProtectCadenceCLIError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case .missingSubcommand:
-            return "expected a subcommand such as 'ingest', 'query', 'model', 'auth', 'setup', or 'validate'"
+            return "expected a subcommand such as 'ingest', 'query', 'model', 'annotations', 'auth', 'setup', or 'validate'"
         case let .unknownSubcommand(command):
             return "unknown subcommand '\(command)'"
         case let .unexpectedArgument(argument):
@@ -30,6 +31,7 @@ public enum ProtectCadenceCLIOutput: Encodable, Sendable {
     case ingest(IngestResponse)
     case query(QueryCommandOutput)
     case model(ModelCommandOutput)
+    case annotations(AnnotationCommandOutput)
     case auth(AuthCommandResponse)
     case validate(ProtectControllerValidationResponse)
 
@@ -40,6 +42,8 @@ public enum ProtectCadenceCLIOutput: Encodable, Sendable {
         case let .query(response):
             try response.encode(to: encoder)
         case let .model(response):
+            try response.encode(to: encoder)
+        case let .annotations(response):
             try response.encode(to: encoder)
         case let .auth(response):
             try response.encode(to: encoder)
@@ -78,6 +82,8 @@ public enum ProtectCadenceCLIRunner {
             return .query(try ProtectCadenceQueryRunner.run(arguments: remainingArguments, now: now))
         case .model:
             return .model(try ProtectCadenceModelRunner.run(arguments: remainingArguments, now: now))
+        case .annotations:
+            return .annotations(try ProtectCadenceAnnotationsRunner.run(arguments: remainingArguments, now: now))
         case .auth:
             return .auth(
                 try ProtectCadenceAuthRunner.run(

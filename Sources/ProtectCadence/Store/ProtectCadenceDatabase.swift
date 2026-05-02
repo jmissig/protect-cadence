@@ -147,6 +147,7 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
     public let eventType: String?
     public let kind: String
     public let eventID: String
+    public let annotations: [Annotation]?
 
     public init(
         id: Int64? = nil,
@@ -156,7 +157,8 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         camera: String,
         eventType: String? = nil,
         kind: String,
-        eventID: String
+        eventID: String,
+        annotations: [Annotation]? = nil
     ) {
         self.id = id
         self.timeStart = timeStart
@@ -166,6 +168,7 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         self.eventType = eventType
         self.kind = kind
         self.eventID = eventID
+        self.annotations = annotations
     }
 
     public enum Columns {
@@ -188,6 +191,7 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         case eventType
         case kind
         case eventID
+        case annotations
     }
 
     public init(row: Row) {
@@ -199,6 +203,21 @@ public struct EventRow: Codable, FetchableRecord, PersistableRecord, TableRecord
         eventType = row["event_type"]
         kind = row["kind"]
         eventID = row["event_id"]
+        annotations = nil
+    }
+
+    public func withAnnotations(_ annotations: [Annotation]?) -> EventRow {
+        EventRow(
+            id: id,
+            timeStart: timeStart,
+            timeEnd: timeEnd,
+            cameraID: cameraID,
+            camera: camera,
+            eventType: eventType,
+            kind: kind,
+            eventID: eventID,
+            annotations: annotations
+        )
     }
 
     public func encode(to container: inout PersistenceContainer) {
@@ -321,17 +340,20 @@ public struct SummaryGroup: Codable, Sendable, Equatable {
     public let eventCount: Int
     public let sourceEventCount: Int
     public let drillDown: QueryDrillDownDescriptor
+    public let annotations: [Annotation]?
 
     public init(
         group: [String: String],
         eventCount: Int,
         sourceEventCount: Int,
-        drillDown: QueryDrillDownDescriptor
+        drillDown: QueryDrillDownDescriptor,
+        annotations: [Annotation]? = nil
     ) {
         self.group = group
         self.eventCount = eventCount
         self.sourceEventCount = sourceEventCount
         self.drillDown = drillDown
+        self.annotations = annotations
     }
 }
 
@@ -422,6 +444,7 @@ public struct CompareGroup: Codable, Sendable, Equatable {
     public let sourceEventCountDelta: Int
     public let windowDrillDown: QueryDrillDownDescriptor
     public let comparisonWindowDrillDown: QueryDrillDownDescriptor
+    public let annotations: [Annotation]?
 
     public init(
         group: [String: String],
@@ -430,7 +453,8 @@ public struct CompareGroup: Codable, Sendable, Equatable {
         eventCountDelta: Int,
         sourceEventCountDelta: Int,
         windowDrillDown: QueryDrillDownDescriptor,
-        comparisonWindowDrillDown: QueryDrillDownDescriptor
+        comparisonWindowDrillDown: QueryDrillDownDescriptor,
+        annotations: [Annotation]? = nil
     ) {
         self.group = group
         self.window = window
@@ -439,6 +463,7 @@ public struct CompareGroup: Codable, Sendable, Equatable {
         self.sourceEventCountDelta = sourceEventCountDelta
         self.windowDrillDown = windowDrillDown
         self.comparisonWindowDrillDown = comparisonWindowDrillDown
+        self.annotations = annotations
     }
 }
 
