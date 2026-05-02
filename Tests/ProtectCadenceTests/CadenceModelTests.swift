@@ -15,40 +15,40 @@ struct CadenceModelTests {
             try insertRows(
                 [
                     EventRow(
-                        timeStart: localDate(day: 14, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 14, hour: 8, minute: 1),
+                        timeStart: localDate(month: 4, day: 14, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 14, hour: 8, minute: 1),
                         cameraID: "driveway-1",
                         camera: "Driveway",
                         kind: "person",
                         eventID: "driveway-a"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 14, hour: 8, minute: 3),
-                        timeEnd: localDate(day: 14, hour: 8, minute: 4),
+                        timeStart: localDate(month: 4, day: 14, hour: 8, minute: 3),
+                        timeEnd: localDate(month: 4, day: 14, hour: 8, minute: 4),
                         cameraID: "driveway-1",
                         camera: "Driveway",
                         kind: "vehicle",
                         eventID: "driveway-b"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 14, hour: 8, minute: 4),
-                        timeEnd: localDate(day: 14, hour: 8, minute: 5),
+                        timeStart: localDate(month: 4, day: 14, hour: 8, minute: 4),
+                        timeEnd: localDate(month: 4, day: 14, hour: 8, minute: 5),
                         cameraID: "backyard-1",
                         camera: "Backyard",
                         kind: "animal",
                         eventID: "backyard-a"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 14, hour: 8, minute: 12),
-                        timeEnd: localDate(day: 14, hour: 8, minute: 13),
+                        timeStart: localDate(month: 4, day: 14, hour: 8, minute: 12),
+                        timeEnd: localDate(month: 4, day: 14, hour: 8, minute: 13),
                         cameraID: "driveway-1",
                         camera: "Driveway",
                         kind: "person",
                         eventID: "driveway-c"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 14, hour: 8, minute: 14),
-                        timeEnd: localDate(day: 14, hour: 8, minute: 16),
+                        timeStart: localDate(month: 4, day: 14, hour: 8, minute: 14),
+                        timeEnd: localDate(month: 4, day: 14, hour: 8, minute: 16),
                         cameraID: "driveway-1",
                         camera: "Driveway",
                         kind: "person",
@@ -60,7 +60,7 @@ struct CadenceModelTests {
 
             let rebuild = try ProtectCadenceModelRunner.run(
                 arguments: ["rebuild", "--db", sourceDatabasePath, "--model-db", modelDatabasePath],
-                now: localDate(day: 14, hour: 9, minute: 0)
+                now: localDate(month: 4, day: 14, hour: 9, minute: 0)
             )
 
             switch rebuild {
@@ -79,7 +79,7 @@ struct CadenceModelTests {
 
             let episodesOutput = try ProtectCadenceModelRunner.run(
                 arguments: ["episodes", "--model-db", modelDatabasePath, "--order", "oldest", "--limit", "10"],
-                now: localDate(day: 14, hour: 9, minute: 0)
+                now: localDate(month: 4, day: 14, hour: 9, minute: 0)
             )
 
             switch episodesOutput {
@@ -91,8 +91,8 @@ struct CadenceModelTests {
                 #expect(first.cameraID == "driveway-1")
                 #expect(first.primaryKind == "person")
                 #expect(first.stateKey == "Driveway:person")
-                #expect(first.startTime == localDate(day: 14, hour: 8, minute: 0))
-                #expect(first.endTime == localDate(day: 14, hour: 8, minute: 4))
+                #expect(first.startTime == localDate(month: 4, day: 14, hour: 8, minute: 0))
+                #expect(first.endTime == localDate(month: 4, day: 14, hour: 8, minute: 4))
                 #expect(first.durationSeconds == 4 * 60)
                 #expect(first.eventCount == 2)
                 #expect(first.sourceEventCount == 2)
@@ -130,22 +130,22 @@ struct CadenceModelTests {
             try insertRows(
                 [
                     EventRow(
-                        timeStart: localDate(day: 13, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 13, hour: 8, minute: 2),
+                        timeStart: localDate(month: 4, day: 13, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 13, hour: 8, minute: 2),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "weekday-1"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 14, hour: 8, minute: 5),
-                        timeEnd: localDate(day: 14, hour: 8, minute: 7),
+                        timeStart: localDate(month: 4, day: 14, hour: 8, minute: 5),
+                        timeEnd: localDate(month: 4, day: 14, hour: 8, minute: 7),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "weekday-2"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 15, hour: 14, minute: 0),
-                        timeEnd: localDate(day: 15, hour: 14, minute: 1),
+                        timeStart: localDate(month: 4, day: 15, hour: 14, minute: 0),
+                        timeEnd: localDate(month: 4, day: 15, hour: 14, minute: 1),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "weekday-3"
@@ -156,7 +156,7 @@ struct CadenceModelTests {
 
             _ = try ProtectCadenceModelRunner.run(
                 arguments: ["rebuild", "--db", sourceDatabasePath, "--model-db", modelDatabasePath],
-                now: localDate(day: 15, hour: 18, minute: 0)
+                now: localDate(month: 4, day: 15, hour: 18, minute: 0)
             )
 
             let dbQueue = try DatabaseQueue(path: modelDatabasePath)
@@ -222,22 +222,22 @@ struct CadenceModelTests {
             try insertRows(
                 [
                     EventRow(
-                        timeStart: localDate(day: 7, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 7, hour: 8, minute: 2),
+                        timeStart: localDate(month: 4, day: 7, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 7, hour: 8, minute: 2),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "episode-1"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 8, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 8, hour: 8, minute: 2),
+                        timeStart: localDate(month: 4, day: 8, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 8, hour: 8, minute: 2),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "episode-2"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 9, hour: 14, minute: 0),
-                        timeEnd: localDate(day: 9, hour: 14, minute: 1),
+                        timeStart: localDate(month: 4, day: 9, hour: 14, minute: 0),
+                        timeEnd: localDate(month: 4, day: 9, hour: 14, minute: 1),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "episode-3"
@@ -248,7 +248,7 @@ struct CadenceModelTests {
 
             _ = try ProtectCadenceModelRunner.run(
                 arguments: ["rebuild", "--db", sourceDatabasePath, "--model-db", modelDatabasePath],
-                now: localDate(day: 9, hour: 18, minute: 0)
+                now: localDate(month: 4, day: 9, hour: 18, minute: 0)
             )
 
             let findingsOutput = try ProtectCadenceModelRunner.run(
@@ -258,7 +258,7 @@ struct CadenceModelTests {
                     "--finding-type", "unexpected_presence",
                     "--limit", "10",
                 ],
-                now: localDate(day: 9, hour: 18, minute: 0)
+                now: localDate(month: 4, day: 9, hour: 18, minute: 0)
             )
 
             switch findingsOutput {
@@ -303,22 +303,22 @@ struct CadenceModelTests {
             try insertRows(
                 [
                     EventRow(
-                        timeStart: localDate(day: 1, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 1, hour: 8, minute: 1),
+                        timeStart: localDate(month: 4, day: 1, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 1, hour: 8, minute: 1),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "episode-1"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 2, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 2, hour: 8, minute: 2),
+                        timeStart: localDate(month: 4, day: 2, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 2, hour: 8, minute: 2),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "episode-2"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 3, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 3, hour: 8, minute: 15),
+                        timeStart: localDate(month: 4, day: 3, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 3, hour: 8, minute: 15),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "episode-3"
@@ -329,7 +329,7 @@ struct CadenceModelTests {
 
             _ = try ProtectCadenceModelRunner.run(
                 arguments: ["rebuild", "--db", sourceDatabasePath, "--model-db", modelDatabasePath],
-                now: localDate(day: 3, hour: 18, minute: 0)
+                now: localDate(month: 4, day: 3, hour: 18, minute: 0)
             )
 
             let findingsOutput = try ProtectCadenceModelRunner.run(
@@ -339,7 +339,7 @@ struct CadenceModelTests {
                     "--finding-type", "unusual_duration",
                     "--limit", "10",
                 ],
-                now: localDate(day: 3, hour: 18, minute: 0)
+                now: localDate(month: 4, day: 3, hour: 18, minute: 0)
             )
 
             switch findingsOutput {
@@ -376,43 +376,43 @@ struct CadenceModelTests {
             try insertRows(
                 [
                     EventRow(
-                        timeStart: localDate(day: 6, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 6, hour: 8, minute: 1),
+                        timeStart: localDate(month: 4, day: 6, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 6, hour: 8, minute: 1),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "day-1-person"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 6, hour: 8, minute: 10),
-                        timeEnd: localDate(day: 6, hour: 8, minute: 11),
+                        timeStart: localDate(month: 4, day: 6, hour: 8, minute: 10),
+                        timeEnd: localDate(month: 4, day: 6, hour: 8, minute: 11),
                         camera: "Driveway",
                         kind: "vehicle",
                         eventID: "day-1-vehicle"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 7, hour: 8, minute: 0),
-                        timeEnd: localDate(day: 7, hour: 8, minute: 1),
+                        timeStart: localDate(month: 4, day: 7, hour: 8, minute: 0),
+                        timeEnd: localDate(month: 4, day: 7, hour: 8, minute: 1),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "day-2-person"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 7, hour: 8, minute: 10),
-                        timeEnd: localDate(day: 7, hour: 8, minute: 11),
+                        timeStart: localDate(month: 4, day: 7, hour: 8, minute: 10),
+                        timeEnd: localDate(month: 4, day: 7, hour: 8, minute: 11),
                         camera: "Driveway",
                         kind: "vehicle",
                         eventID: "day-2-vehicle"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 8, hour: 14, minute: 0),
-                        timeEnd: localDate(day: 8, hour: 14, minute: 1),
+                        timeStart: localDate(month: 4, day: 8, hour: 14, minute: 0),
+                        timeEnd: localDate(month: 4, day: 8, hour: 14, minute: 1),
                         camera: "Driveway",
                         kind: "person",
                         eventID: "day-3-person"
                     ),
                     EventRow(
-                        timeStart: localDate(day: 8, hour: 14, minute: 10),
-                        timeEnd: localDate(day: 8, hour: 14, minute: 11),
+                        timeStart: localDate(month: 4, day: 8, hour: 14, minute: 10),
+                        timeEnd: localDate(month: 4, day: 8, hour: 14, minute: 11),
                         camera: "Driveway",
                         kind: "vehicle",
                         eventID: "day-3-vehicle"
@@ -423,7 +423,7 @@ struct CadenceModelTests {
 
             _ = try ProtectCadenceModelRunner.run(
                 arguments: ["rebuild", "--db", sourceDatabasePath, "--model-db", modelDatabasePath],
-                now: localDate(day: 8, hour: 18, minute: 0)
+                now: localDate(month: 4, day: 8, hour: 18, minute: 0)
             )
 
             let findingsOutput = try ProtectCadenceModelRunner.run(
@@ -433,7 +433,7 @@ struct CadenceModelTests {
                     "--finding-type", "unexpected_transition",
                     "--limit", "10",
                 ],
-                now: localDate(day: 8, hour: 18, minute: 0)
+                now: localDate(month: 4, day: 8, hour: 18, minute: 0)
             )
 
             switch findingsOutput {
@@ -468,49 +468,5 @@ struct CadenceModelTests {
                 Issue.record("expected findings output")
             }
         }
-    }
-
-    private func insertRows(_ rows: [EventRow], into database: ProtectCadenceDatabase) throws {
-        for row in rows {
-            try database.insert(row)
-        }
-    }
-
-    private func temporarySQLitePath() -> String {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("sqlite")
-            .path
-    }
-
-    private func localDate(
-        year: Int = 2026,
-        month: Int = 4,
-        day: Int,
-        hour: Int,
-        minute: Int,
-        second: Int = 0,
-        timeZoneID: String = "America/Los_Angeles"
-    ) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: timeZoneID)!
-        return calendar.date(from: DateComponents(
-            timeZone: calendar.timeZone,
-            year: year,
-            month: month,
-            day: day,
-            hour: hour,
-            minute: minute,
-            second: second
-        ))!
-    }
-
-    private func withDefaultTimeZone<T>(_ timeZoneID: String, operation: () throws -> T) throws -> T {
-        let original = NSTimeZone.default
-        NSTimeZone.default = try #require(TimeZone(identifier: timeZoneID))
-        defer {
-            NSTimeZone.default = original
-        }
-        return try operation()
     }
 }
