@@ -15,8 +15,8 @@ Read-only exploration is for looking, not deciding.
 
 Do:
 
-- open evidence/model databases read-only;
-- inspect counts, freshness, examples, and support rows;
+- open evidence/model/annotation databases read-only;
+- inspect counts, freshness, examples, support rows, and attached human commentary;
 - use SQL to debug whether CLI/model output is missing evidence or over-weighting stale evidence;
 - keep camera data at the household-activity sensor layer;
 - turn repeated useful SQL patterns into future CLI verbs or docs.
@@ -25,6 +25,7 @@ Do not:
 
 - write to the evidence database during inspection;
 - write to the model database except through `protect-cadence model rebuild`;
+- write annotations directly with SQL; use `protect-cadence annotations add` only after human approval;
 - use SQL as the default Robut answer path when a stable CLI command exists;
 - expose or request video, thumbnails, clips, audio, faces, or identity-level media surfaces;
 - infer mood, relationships, safety, identity, work habits, or private behavior from detections;
@@ -34,13 +35,14 @@ When unsure, run `protect-cadence --help` and the relevant subcommand help befor
 
 ## Database paths
 
-The evidence database stores normalized detection rows. The model database stores rebuildable derived episodes, bucket/transition stats, and attention findings.
+The evidence database stores normalized detection rows. The model database stores rebuildable derived episodes, bucket/transition stats, and attention findings. The annotations database stores writable human commentary as a sibling sidecar; it is interpretive context, not source evidence or model output.
 
 Default managed paths are:
 
 ```text
 ~/Library/Application Support/protect-cadence/protect-cadence.sqlite
 ~/Library/Application Support/protect-cadence/protect-cadence-model.sqlite
+~/Library/Application Support/protect-cadence/protect-cadence-annotations.sqlite
 ```
 
 Local repo/test runs may instead use an explicit `--db` or a working-directory `protect-cadence.sqlite`. To resolve configured paths, prefer CLI output:
@@ -66,12 +68,13 @@ Open the evidence DB read-only with Datasette:
 datasette "$HOME/Library/Application Support/protect-cadence/protect-cadence.sqlite" --immutable
 ```
 
-Open both evidence and model DBs:
+Open evidence, model, and annotations DBs:
 
 ```bash
 datasette \
   "$HOME/Library/Application Support/protect-cadence/protect-cadence.sqlite" \
   "$HOME/Library/Application Support/protect-cadence/protect-cadence-model.sqlite" \
+  "$HOME/Library/Application Support/protect-cadence/protect-cadence-annotations.sqlite" \
   --immutable
 ```
 
@@ -81,7 +84,12 @@ For safer scratch exploration:
 mkdir -p .tmp
 cp "$HOME/Library/Application Support/protect-cadence/protect-cadence.sqlite" .tmp/protect-cadence-exploration.sqlite
 cp "$HOME/Library/Application Support/protect-cadence/protect-cadence-model.sqlite" .tmp/protect-cadence-model-exploration.sqlite
-datasette .tmp/protect-cadence-exploration.sqlite .tmp/protect-cadence-model-exploration.sqlite --immutable
+if [ -f "$HOME/Library/Application Support/protect-cadence/protect-cadence-annotations.sqlite" ]; then
+  cp "$HOME/Library/Application Support/protect-cadence/protect-cadence-annotations.sqlite" .tmp/protect-cadence-annotations-exploration.sqlite
+  datasette .tmp/protect-cadence-exploration.sqlite .tmp/protect-cadence-model-exploration.sqlite .tmp/protect-cadence-annotations-exploration.sqlite --immutable
+else
+  datasette .tmp/protect-cadence-exploration.sqlite .tmp/protect-cadence-model-exploration.sqlite --immutable
+fi
 ```
 
 ## Core tables
@@ -103,6 +111,12 @@ Model DB:
 - `attention_findings` — descriptive attention candidates produced from the model
 - `attention_finding_episodes` — finding → supporting/context episodes
 
+Annotations DB:
+
+- `annotations` — human-readable interpretive notes attached to targets such as cameras, events, episodes, findings, contexts, and windows
+  - important columns: `account`, `target_kind`, `target_id`, `body`, `source`, `created_at`, `updated_at`
+  - annotations are attached context, not source events, derived cadence facts, privacy enforcement, or judgments
+
 ## Canned exploration queries
 
 ### Evidence freshness
@@ -117,6 +131,33 @@ FROM events;
 ```
 
 Caveat: `event_rows` counts normalized kind rows. Use `COUNT(DISTINCT event_id)` when asking about source Protect events.
+
+### Annotation targets that may affect interpretation
+
+Prefer the CLI for writing and normal discovery:
+
+```bash
+protect-cadence annotations kinds --format json
+protect-cadence annotations targets --account default --format json
+protect-cadence annotations list --account default --target-kind camera --target-id name:Driveway --format json
+```
+
+Use SQL only for read-only inspection across many annotation targets:
+
+```sql
+SELECT
+  account,
+  target_kind,
+  target_id,
+  COUNT(*) AS annotations,
+  MAX(updated_at) AS last_updated_at
+FROM annotations
+GROUP BY account, target_kind, target_id
+ORDER BY last_updated_at DESC, target_kind, target_id
+LIMIT 50;
+```
+
+Caveat: annotations may change how future answers should phrase or caveat evidence, but they are not source rows, model facts, ratings, alarms, or privacy enforcement.
 
 ### Recent activity by camera and kind
 
