@@ -23,7 +23,15 @@
 - Keep the current summary/compare drill-down descriptors stable enough for agents to rely on.
 - Add richer drill-down metadata only if downstream tools need more than an exact `query events` slice.
 - Consider whether a small shared query grammar object should become a documented contract for OpenClaw-facing integrations.
-- Use [Docs/pattern-intelligence-proposal.md](Docs/pattern-intelligence-proposal.md) to guide any Datasette/read-only exploration docs, stable evidence-output fields, future Robut-composed House Activity Almanac/Guide material, and correction/privacy boundary work.
+- Use [Docs/pattern-intelligence-proposal.md](Docs/pattern-intelligence-proposal.md) and [Docs/pattern-boundary-and-corrections.md](Docs/pattern-boundary-and-corrections.md) to guide Datasette/read-only exploration docs, stable evidence-output fields, future Robut-composed House Activity Almanac/Guide material, and annotation/privacy boundary work.
+- Add a small sidecar `annotations` table following the `swarm-cadence` shape: `id`, `account`, `target_kind`, `target_id`, `body`, `source`, `created_at`, `updated_at`.
+- Keep annotations as attached interpretive context, not Protect source events, derived cadence facts, privacy policy enforcement, preferences, or House Activity Guide/recommendation machinery.
+- Use domain-local target kinds such as `camera`, `event`, `episode`, `zone`, `context`, and `window`; normalize/validate `target_kind`, but keep `target_id` flexible enough for handles like `context:family-privacy`, `window:school-morning`, or a camera/event ID.
+- Include annotations inline by default where summary/query output naturally encounters the target, with an opt-out flag matching the final command vocabulary.
+- Add discovery verbs equivalent to `annotations kinds` and `annotations targets` so agents can reuse local conventions.
+- Define scoped annotation examples soon: false-positive kind caveat, ignore camera/window caveat, routine exception, privacy-context note, and human-approved meaning override.
+- Keep read paths read-only: no permanent query-side migrations; run migrations only from explicit write/maintenance paths.
+- Keep the `model findings` JSON `audit` object stable for agent consumers: run/source/scoring context, observed evidence, baseline/support counts, drill-down descriptors, and explicit boundaries.
 
 ## Derived Model Database
 

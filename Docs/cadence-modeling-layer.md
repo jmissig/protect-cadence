@@ -225,6 +225,22 @@ Prefer records shaped more like:
 - `episode_ids`
 - `event_drilldown_descriptor`
 
+Implemented `model findings` JSON includes the original flat finding fields plus an
+`audit` object for each finding. The audit object is the stable source trail agents
+should prefer when explaining why a finding exists:
+
+- `run` identifies the model run, model version, and build time.
+- `sourceWindow` records the source evidence range used by the rebuild, when bounded.
+- `scoringWindow` records the user-requested findings window, when bounded.
+- `observed` describes the current episode and, for transitions, the previous episode.
+- `baseline` carries the bucket/state counts, expected duration, expected gap, or transition counts that made the finding attention-worthy.
+- `support` lists linked episode IDs and the relevant support counts.
+- `drillDown.episodes` gives reproducible `model episodes` filters for the current and, for transitions, previous episode.
+- `drillDown.events` gives matching `query events` descriptors for inspecting source event rows.
+- `boundaries` states that findings are descriptive attention candidates and exclude live video, thumbnails, and audio.
+
+Human text output intentionally stays compact; the audit contract is for JSON consumers and agents.
+
 ## Suggested database split
 
 A separate model database could contain tables like:

@@ -163,6 +163,7 @@ public struct ModelFinding: Codable, Sendable, Equatable {
     public let observedGapSeconds: Int?
     public let expectedGapSeconds: Double?
     public let linkedEpisodeIDs: [Int64]
+    public let audit: ModelFindingAudit?
 
     public init(
         id: Int64,
@@ -188,7 +189,8 @@ public struct ModelFinding: Codable, Sendable, Equatable {
         transitionPairCount: Int?,
         observedGapSeconds: Int?,
         expectedGapSeconds: Double?,
-        linkedEpisodeIDs: [Int64]
+        linkedEpisodeIDs: [Int64],
+        audit: ModelFindingAudit? = nil
     ) {
         self.id = id
         self.findingType = findingType
@@ -214,6 +216,172 @@ public struct ModelFinding: Codable, Sendable, Equatable {
         self.observedGapSeconds = observedGapSeconds
         self.expectedGapSeconds = expectedGapSeconds
         self.linkedEpisodeIDs = linkedEpisodeIDs
+        self.audit = audit
+    }
+}
+
+public struct ModelFindingAudit: Codable, Sendable, Equatable {
+    public let run: ModelFindingRun
+    public let sourceWindow: QueryWindow?
+    public let scoringWindow: QueryWindow?
+    public let observed: ModelFindingObserved
+    public let baseline: ModelFindingBaseline
+    public let support: ModelFindingSupport
+    public let drillDown: ModelFindingDrillDown
+    public let boundaries: [String]
+
+    public init(
+        run: ModelFindingRun,
+        sourceWindow: QueryWindow?,
+        scoringWindow: QueryWindow?,
+        observed: ModelFindingObserved,
+        baseline: ModelFindingBaseline,
+        support: ModelFindingSupport,
+        drillDown: ModelFindingDrillDown,
+        boundaries: [String]
+    ) {
+        self.run = run
+        self.sourceWindow = sourceWindow
+        self.scoringWindow = scoringWindow
+        self.observed = observed
+        self.baseline = baseline
+        self.support = support
+        self.drillDown = drillDown
+        self.boundaries = boundaries
+    }
+}
+
+public struct ModelFindingRun: Codable, Sendable, Equatable {
+    public let runID: Int64
+    public let modelVersion: String
+    public let builtAt: Date
+
+    public init(runID: Int64, modelVersion: String, builtAt: Date) {
+        self.runID = runID
+        self.modelVersion = modelVersion
+        self.builtAt = builtAt
+    }
+}
+
+public struct ModelFindingObserved: Codable, Sendable, Equatable {
+    public let episodeID: Int64
+    public let episodeWindow: QueryWindow
+    public let camera: String
+    public let primaryKind: String
+    public let stateKey: String
+    public let previousEpisodeID: Int64?
+    public let previousPrimaryKind: String?
+    public let previousStateKey: String?
+    public let observedDurationSeconds: Int?
+    public let observedGapSeconds: Int?
+
+    public init(
+        episodeID: Int64,
+        episodeWindow: QueryWindow,
+        camera: String,
+        primaryKind: String,
+        stateKey: String,
+        previousEpisodeID: Int64?,
+        previousPrimaryKind: String?,
+        previousStateKey: String?,
+        observedDurationSeconds: Int?,
+        observedGapSeconds: Int?
+    ) {
+        self.episodeID = episodeID
+        self.episodeWindow = episodeWindow
+        self.camera = camera
+        self.primaryKind = primaryKind
+        self.stateKey = stateKey
+        self.previousEpisodeID = previousEpisodeID
+        self.previousPrimaryKind = previousPrimaryKind
+        self.previousStateKey = previousStateKey
+        self.observedDurationSeconds = observedDurationSeconds
+        self.observedGapSeconds = observedGapSeconds
+    }
+}
+
+public struct ModelFindingBaseline: Codable, Sendable, Equatable {
+    public let hourOfDay: Int
+    public let dayClass: ModelDayClass
+    public let bucketEpisodeCount: Int
+    public let stateEpisodeCount: Int
+    public let expectedDurationSeconds: Double?
+    public let durationDirection: String?
+    public let transitionBucketCount: Int?
+    public let transitionPairCount: Int?
+    public let expectedGapSeconds: Double?
+
+    public init(
+        hourOfDay: Int,
+        dayClass: ModelDayClass,
+        bucketEpisodeCount: Int,
+        stateEpisodeCount: Int,
+        expectedDurationSeconds: Double?,
+        durationDirection: String?,
+        transitionBucketCount: Int?,
+        transitionPairCount: Int?,
+        expectedGapSeconds: Double?
+    ) {
+        self.hourOfDay = hourOfDay
+        self.dayClass = dayClass
+        self.bucketEpisodeCount = bucketEpisodeCount
+        self.stateEpisodeCount = stateEpisodeCount
+        self.expectedDurationSeconds = expectedDurationSeconds
+        self.durationDirection = durationDirection
+        self.transitionBucketCount = transitionBucketCount
+        self.transitionPairCount = transitionPairCount
+        self.expectedGapSeconds = expectedGapSeconds
+    }
+}
+
+public struct ModelFindingSupport: Codable, Sendable, Equatable {
+    public let linkedEpisodeIDs: [Int64]
+    public let bucketEpisodeCount: Int
+    public let stateEpisodeCount: Int
+    public let transitionBucketCount: Int?
+    public let transitionPairCount: Int?
+
+    public init(
+        linkedEpisodeIDs: [Int64],
+        bucketEpisodeCount: Int,
+        stateEpisodeCount: Int,
+        transitionBucketCount: Int?,
+        transitionPairCount: Int?
+    ) {
+        self.linkedEpisodeIDs = linkedEpisodeIDs
+        self.bucketEpisodeCount = bucketEpisodeCount
+        self.stateEpisodeCount = stateEpisodeCount
+        self.transitionBucketCount = transitionBucketCount
+        self.transitionPairCount = transitionPairCount
+    }
+}
+
+public struct ModelFindingDrillDown: Codable, Sendable, Equatable {
+    public let episodes: [ModelEpisodeDrillDownDescriptor]
+    public let events: [QueryDrillDownDescriptor]
+
+    public init(episodes: [ModelEpisodeDrillDownDescriptor], events: [QueryDrillDownDescriptor]) {
+        self.episodes = episodes
+        self.events = events
+    }
+}
+
+public struct ModelEpisodeDrillDownDescriptor: Codable, Sendable, Equatable {
+    public let command: String
+    public let relation: String
+    public let episodeIDs: [Int64]
+    public let filters: ModelEpisodeFilters
+
+    public init(
+        command: String = ModelSubcommand.episodes.rawValue,
+        relation: String,
+        episodeIDs: [Int64],
+        filters: ModelEpisodeFilters
+    ) {
+        self.command = command
+        self.relation = relation
+        self.episodeIDs = episodeIDs
+        self.filters = filters
     }
 }
 
@@ -395,7 +563,7 @@ public enum ModelCLIError: Error, CustomStringConvertible {
     }
 }
 
-public struct ModelEpisodeFilters: Sendable, Equatable {
+public struct ModelEpisodeFilters: Codable, Sendable, Equatable {
     public let window: QueryWindow?
     public let cameras: [String]
     public let kinds: [String]
@@ -771,6 +939,26 @@ private struct ModelRunRow {
             }(),
             parameters: parameters
         )
+    }
+}
+
+private struct FindingEpisodeRow: Sendable {
+    let episodeID: Int64
+    let relation: String
+    let camera: String
+    let primaryKind: String
+    let stateKey: String
+    let startTime: Date
+    let endTime: Date
+
+    init(row: Row) {
+        episodeID = row["episode_id"]
+        relation = row["relation"]
+        camera = row["camera"]
+        primaryKind = row["primary_kind"]
+        stateKey = row["state_key"]
+        startTime = row["start_time"]
+        endTime = row["end_time"]
     }
 }
 
@@ -1165,14 +1353,22 @@ public final class ProtectCadenceModelDatabase {
                 let linkedEpisodeRows = try Row.fetchAll(
                     db,
                     sql: """
-                        SELECT episode_id, relation
-                        FROM attention_finding_episodes
-                        WHERE finding_id = ?
-                        ORDER BY relation ASC, episode_id ASC
+                        SELECT
+                            afe.episode_id,
+                            afe.relation,
+                            e.camera,
+                            e.primary_kind,
+                            e.state_key,
+                            e.start_time,
+                            e.end_time
+                        FROM attention_finding_episodes afe
+                        JOIN episodes e ON e.id = afe.episode_id
+                        WHERE afe.finding_id = ?
+                        ORDER BY afe.relation ASC, afe.episode_id ASC
                         """,
-                    arguments: [findingID]
-                )
-                let previousEpisodeID = linkedEpisodeRows.first { ($0["relation"] as String) == "previous" }.map { $0["episode_id"] as Int64 }
+                        arguments: [findingID]
+                ).map(FindingEpisodeRow.init)
+                let previousEpisodeID = linkedEpisodeRows.first { $0.relation == "previous" }.map(\.episodeID)
 
                 guard let findingType = ModelFindingType(rawValue: row["finding_type"]) else {
                     throw DatabaseError(resultCode: .SQLITE_ERROR, message: "unexpected finding_type")
@@ -1202,10 +1398,165 @@ public final class ProtectCadenceModelDatabase {
                     transitionPairCount: row["transition_pair_count"],
                     observedGapSeconds: row["observed_gap_seconds"],
                     expectedGapSeconds: row["expected_gap_seconds"],
-                    linkedEpisodeIDs: linkedEpisodeRows.map { $0["episode_id"] }
+                    linkedEpisodeIDs: linkedEpisodeRows.map(\.episodeID),
+                    audit: Self.makeFindingAudit(
+                        findingType: findingType,
+                        run: run.metadata,
+                        scoringWindow: request.filters.window,
+                        row: row,
+                        linkedEpisodes: linkedEpisodeRows,
+                        previousEpisodeID: previousEpisodeID
+                    )
                 )
             }
         }
+    }
+
+    private static func makeFindingAudit(
+        findingType: ModelFindingType,
+        run: ModelBuildMetadata,
+        scoringWindow: QueryWindow?,
+        row: Row,
+        linkedEpisodes: [FindingEpisodeRow],
+        previousEpisodeID: Int64?
+    ) -> ModelFindingAudit {
+        let camera: String = row["camera"]
+        let primaryKind: String = row["primary_kind"]
+        let stateKey: String = row["state_key"]
+        let episodeID: Int64 = row["episode_id"]
+        let episodeStartTime: Date = row["episode_start_time"]
+        let episodeEndTime: Date = row["episode_end_time"]
+        let hourOfDay: Int = row["hour_of_day"]
+        let dayClass = ModelDayClass(rawValue: row["day_class"]) ?? .weekday
+        let observedDurationSeconds: Int? = row["observed_duration_seconds"]
+        let expectedDurationSeconds: Double? = row["expected_duration_seconds"]
+        let durationDirection: String? = row["duration_direction"]
+        let previousPrimaryKind: String? = row["previous_primary_kind"]
+        let previousStateKey: String? = row["previous_state_key"]
+        let transitionBucketCount: Int? = row["transition_bucket_count"]
+        let transitionPairCount: Int? = row["transition_pair_count"]
+        let observedGapSeconds: Int? = row["observed_gap_seconds"]
+        let expectedGapSeconds: Double? = row["expected_gap_seconds"]
+        let bucketEpisodeCount: Int = row["bucket_episode_count"]
+        let stateEpisodeCount: Int = row["state_episode_count"]
+
+        return ModelFindingAudit(
+            run: ModelFindingRun(
+                runID: run.runID,
+                modelVersion: run.parameters.modelVersion,
+                builtAt: run.builtAt
+            ),
+            sourceWindow: run.sourceWindow,
+            scoringWindow: scoringWindow,
+            observed: ModelFindingObserved(
+                episodeID: episodeID,
+                episodeWindow: QueryWindow(start: episodeStartTime, end: episodeEndTime),
+                camera: camera,
+                primaryKind: primaryKind,
+                stateKey: stateKey,
+                previousEpisodeID: previousEpisodeID,
+                previousPrimaryKind: previousPrimaryKind,
+                previousStateKey: previousStateKey,
+                observedDurationSeconds: observedDurationSeconds,
+                observedGapSeconds: observedGapSeconds
+            ),
+            baseline: ModelFindingBaseline(
+                hourOfDay: hourOfDay,
+                dayClass: dayClass,
+                bucketEpisodeCount: bucketEpisodeCount,
+                stateEpisodeCount: stateEpisodeCount,
+                expectedDurationSeconds: expectedDurationSeconds,
+                durationDirection: durationDirection,
+                transitionBucketCount: transitionBucketCount,
+                transitionPairCount: transitionPairCount,
+                expectedGapSeconds: expectedGapSeconds
+            ),
+            support: ModelFindingSupport(
+                linkedEpisodeIDs: linkedEpisodes.map(\.episodeID),
+                bucketEpisodeCount: bucketEpisodeCount,
+                stateEpisodeCount: stateEpisodeCount,
+                transitionBucketCount: transitionBucketCount,
+                transitionPairCount: transitionPairCount
+            ),
+            drillDown: makeFindingDrillDown(
+                findingType: findingType,
+                camera: camera,
+                primaryKind: primaryKind,
+                stateKey: stateKey,
+                episodeID: episodeID,
+                episodeStartTime: episodeStartTime,
+                episodeEndTime: episodeEndTime,
+                previousPrimaryKind: previousPrimaryKind,
+                previousStateKey: previousStateKey,
+                linkedEpisodes: linkedEpisodes
+            ),
+            boundaries: [
+                "Findings are descriptive attention candidates, not household judgments.",
+                "Drill-downs inspect local evidence/model rows only; no live video, thumbnails, or audio are included.",
+            ]
+        )
+    }
+
+    private static func makeFindingDrillDown(
+        findingType: ModelFindingType,
+        camera: String,
+        primaryKind: String,
+        stateKey: String,
+        episodeID: Int64,
+        episodeStartTime: Date,
+        episodeEndTime: Date,
+        previousPrimaryKind: String?,
+        previousStateKey: String?,
+        linkedEpisodes: [FindingEpisodeRow]
+    ) -> ModelFindingDrillDown {
+        let currentEpisode = ModelEpisodeDrillDownDescriptor(
+            relation: "current",
+            episodeIDs: [episodeID],
+            filters: ModelEpisodeFilters(
+                window: QueryWindow(start: episodeStartTime, end: episodeEndTime),
+                cameras: [camera],
+                kinds: [primaryKind],
+                stateKeys: [stateKey]
+            )
+        )
+        let currentEvents = QueryDrillDownDescriptor(
+            filters: QueryFilters(
+                window: QueryWindow(start: episodeStartTime, end: episodeEndTime),
+                cameras: [camera],
+                kinds: [primaryKind]
+            )
+        )
+
+        guard findingType == .unexpectedTransition else {
+            return ModelFindingDrillDown(episodes: [currentEpisode], events: [currentEvents])
+        }
+
+        guard let previous = linkedEpisodes.first(where: { $0.relation == "previous" }) else {
+            return ModelFindingDrillDown(episodes: [currentEpisode], events: [currentEvents])
+        }
+
+        let previousEpisode = ModelEpisodeDrillDownDescriptor(
+            relation: "previous",
+            episodeIDs: [previous.episodeID],
+            filters: ModelEpisodeFilters(
+                window: QueryWindow(start: previous.startTime, end: previous.endTime),
+                cameras: [previous.camera],
+                kinds: [previousPrimaryKind ?? previous.primaryKind],
+                stateKeys: [previousStateKey ?? previous.stateKey]
+            )
+        )
+        let previousEvents = QueryDrillDownDescriptor(
+            filters: QueryFilters(
+                window: QueryWindow(start: previous.startTime, end: previous.endTime),
+                cameras: [previous.camera],
+                kinds: [previousPrimaryKind ?? previous.primaryKind]
+            )
+        )
+
+        return ModelFindingDrillDown(
+            episodes: [previousEpisode, currentEpisode],
+            events: [previousEvents, currentEvents]
+        )
     }
 
     public func latestCounts() throws -> (episodeCount: Int, stateBucketStatCount: Int, stateTransitionStatCount: Int, findingCount: Int) {
